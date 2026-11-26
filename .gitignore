@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+.vscode/
+.claude/settings.local.json
+# Source planning PDFs stay local until the owner decides to publish them
+*.pdf
