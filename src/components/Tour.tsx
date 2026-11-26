@@ -65,6 +65,8 @@ export function Tour() {
   const tamperOld = useSwarm((st) => st.tamperOld);
   const checkChain = useSwarm((st) => st.checkChain);
   const tamper = useSwarm((st) => st.tamper);
+  const chainCheck = useSwarm((st) => st.chainCheck);
+  const undoTamper = useSwarm((st) => st.undoTamper);
   const togglePause = useSwarm((st) => st.togglePause);
   const members = useSwarm((st) => st.members);
   const navigate = useNavigate();
@@ -148,15 +150,35 @@ export function Tour() {
       </button>
     );
   } else if (step === 7) {
-    action = !tamper ? (
-      <button type="button" className="btn btn-sm" onClick={tamperOld}>
-        Change entry 8
-      </button>
-    ) : (
-      <button type="button" className="btn btn-primary btn-sm" onClick={() => checkChain()}>
-        Check the chain
-      </button>
-    );
+    if (!tamper && chainCheck?.ok)
+      action = (
+        <>
+          <span className={s.done}>
+            <Icon name="check" size={14} /> Chain intact again
+          </span>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={tamperOld}>
+            Try again
+          </button>
+        </>
+      );
+    else if (!tamper)
+      action = (
+        <button type="button" className="btn btn-sm" onClick={tamperOld}>
+          Change entry 8
+        </button>
+      );
+    else if (!chainCheck)
+      action = (
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => checkChain()}>
+          Check the chain
+        </button>
+      );
+    else
+      action = (
+        <button type="button" className="btn btn-bad btn-sm" onClick={() => undoTamper()}>
+          Undo the change
+        </button>
+      );
   }
 
   return (

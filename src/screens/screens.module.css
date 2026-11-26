@@ -511,7 +511,7 @@ a.tile:hover {
   font-weight: 500;
   color: var(--ink-3);
   letter-spacing: -0.01em;
-  margin-left: 2px;
+  margin-left: 6px;
 }
 
 .tileSub {

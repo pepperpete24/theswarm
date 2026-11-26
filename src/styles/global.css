@@ -552,6 +552,7 @@ code {
 /* ---------- Tables ---------- */
 
 .table-wrap {
+  position: relative;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }

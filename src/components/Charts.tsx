@@ -1,4 +1,18 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+
+/** Track an element's width so SVG text renders at its real size. */
+function useWidth<T extends HTMLElement>(fallback: number) {
+  const ref = useRef<T>(null);
+  const [w, setW] = useState(fallback);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([e]) => setW(Math.max(280, Math.round(e.contentRect.width))));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w] as const;
+}
 import s from './Charts.module.css';
 
 /* ------------------------------------------------------------------------ */
@@ -203,23 +217,29 @@ export function ColumnChart({
   ariaLabel: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
-  const W = 640;
-  const H = 230;
+  const [wrapRef, W] = useWidth<HTMLDivElement>(640);
+  const H = 240;
   const padT = 26;
   const padB = 30;
   const padL = 8;
-  const padR = 70;
+  const padR = W < 480 ? 8 : 92;
   const top = Math.max(limit * 1.12, ...data.map((d) => d.value));
   const band = (W - padL - padR) / data.length;
-  const bw = Math.min(40, band * 0.56);
+  const bw = Math.min(24, band * 0.56);
+  const narrow = W < 480;
   const y = (v: number) => padT + (1 - v / top) * (H - padT - padB);
   const base = H - padB;
   return (
-    <div className={s.colWrap}>
+    <div className={s.colWrap} ref={wrapRef}>
       <svg viewBox={`0 0 ${W} ${H}`} className={s.cols} role="img" aria-label={ariaLabel}>
-        <line x1={padL} x2={W - padR + 8} y1={base} y2={base} className={s.baseLine} />
-        <line x1={padL} x2={W - padR + 8} y1={y(limit)} y2={y(limit)} className={s.limitLine} />
-        <text x={W - padR + 12} y={y(limit) + 4} className={s.limitText}>
+        <line x1={padL} x2={W - padR} y1={base} y2={base} className={s.baseLine} />
+        <line x1={padL} x2={W - padR} y1={y(limit)} y2={y(limit)} className={s.limitLine} />
+        <text
+          x={narrow ? W - padR : W - padR + 14}
+          y={narrow ? y(limit) - 8 : y(limit) + 4}
+          className={s.limitText}
+          textAnchor={narrow ? 'end' : 'start'}
+        >
           {format(limit)} limit
         </text>
         {data.map((d, i) => {
@@ -247,7 +267,11 @@ export function ColumnChart({
                 d={path}
                 className={`${s.col} ${isHi ? s.colHi : ''} ${hover === i ? s.colHover : ''}`}
               />
-              <text x={cx} y={base - h - 7} className={`${s.colVal} ${isHi ? s.colValHi : ''}`}>
+              <text
+                x={cx}
+                y={base - h - 8}
+                className={`${s.colVal} ${isHi ? s.colValHi : ''} ${narrow && !isHi ? s.colValHide : ''}`}
+              >
                 {format(d.value)}
               </text>
               <text x={cx} y={H - 9} className={`${s.colLabel} ${isHi ? s.colValHi : ''}`}>

@@ -16,9 +16,12 @@ export const PRICE_POINTS = 96;
 export function makePrices(seed = 20261126, n = PRICE_POINTS): number[] {
   const rand = mulberry32(seed);
   const raw: number[] = [];
+  // A little momentum makes the walk look like a real, gently trending market.
   let p = 0;
+  let v = 0;
   for (let i = 0; i < n; i++) {
-    p += (rand() - 0.47) * 0.00042;
+    v = v * 0.72 + (rand() - 0.46) * 0.00016;
+    p += v;
     raw.push(p);
   }
   const mean = raw.reduce((s, x) => s + x, 0) / n;
