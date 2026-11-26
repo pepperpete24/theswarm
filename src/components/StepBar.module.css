@@ -1,0 +1,180 @@
+.bar {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.seg {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  cursor: default;
+  outline: none;
+}
+
+.track {
+  height: 8px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  transition: background 300ms var(--ease);
+}
+
+.seg:first-child .track {
+  border-radius: 6px 3px 3px 6px;
+}
+
+.seg:last-child .track {
+  border-radius: 3px 6px 6px 3px;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.n {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+
+.name {
+  font-size: 12px;
+  color: var(--ink-2);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.done .track {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.current .track {
+  background: var(--warn-dot);
+  border-color: var(--warn-dot);
+  animation: seg-pulse 1.4s ease-in-out infinite;
+}
+
+.current .name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.failed .track {
+  background: var(--bad);
+  border-color: var(--bad);
+}
+
+.failed .name {
+  color: var(--bad);
+  font-weight: 600;
+}
+
+.plain .track {
+  background: linear-gradient(90deg, var(--accent-soft), var(--accent-line));
+  border-color: var(--accent-line);
+}
+
+.plain:hover .track,
+.plain:focus-visible .track {
+  background: var(--accent);
+}
+
+@keyframes seg-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.tip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translate(-50%, 4px);
+  width: 220px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 12.5px;
+  line-height: 1.45;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 140ms var(--ease),
+    transform 140ms var(--ease);
+  z-index: 20;
+  box-shadow: var(--shadow-pop);
+}
+
+.tip strong {
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+
+.seg:first-child .tip,
+.seg:nth-child(2) .tip {
+  left: 0;
+  transform: translate(0, 4px);
+}
+
+.seg:last-child .tip,
+.seg:nth-last-child(2) .tip {
+  left: auto;
+  right: 0;
+  transform: translate(0, 4px);
+}
+
+.seg:hover .tip,
+.seg:focus-visible .tip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.seg:first-child:hover .tip,
+.seg:nth-child(2):hover .tip,
+.seg:last-child:hover .tip,
+.seg:nth-last-child(2):hover .tip,
+.seg:first-child:focus-visible .tip,
+.seg:nth-child(2):focus-visible .tip,
+.seg:last-child:focus-visible .tip,
+.seg:nth-last-child(2):focus-visible .tip {
+  transform: translate(0, 0);
+}
+
+.seg:focus-visible .track {
+  box-shadow: var(--focus);
+}
+
+@media (max-width: 760px) {
+  .name {
+    display: none;
+  }
+  .current .name,
+  .failed .name {
+    display: block;
+    position: absolute;
+    top: 34px;
+    white-space: nowrap;
+  }
+  .seg:nth-last-child(-n + 3).current .name,
+  .seg:nth-last-child(-n + 3).failed .name {
+    right: 0;
+  }
+  .bar {
+    padding-bottom: 18px;
+  }
+}

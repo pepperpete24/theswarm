@@ -1,0 +1,278 @@
+/* ---------- Sparkline ---------- */
+
+.sparkWrap {
+  position: relative;
+  width: 100%;
+}
+
+.spark {
+  display: block;
+  width: 100%;
+  height: 170px;
+  overflow: visible;
+}
+
+.sparkLine {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.gridLine {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+}
+
+.gridLabel {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--ink-3);
+  background: var(--surface);
+  padding: 0 0 0 6px;
+}
+
+.cross {
+  stroke: var(--ink-3);
+  stroke-width: 1;
+}
+
+.endDot,
+.hoverDot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 2px var(--surface);
+  pointer-events: none;
+}
+
+.upDot {
+  background: var(--good);
+}
+
+.downDot {
+  background: var(--bad);
+}
+
+.endDot::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0.3;
+}
+
+.hoverDot {
+  background: var(--accent);
+}
+
+.tooltip {
+  position: absolute;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 13px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: var(--shadow-pop);
+}
+
+.tipSub {
+  font-size: 11.5px;
+  opacity: 0.7;
+}
+
+/* ---------- Horizontal bars ---------- */
+
+.hbars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hrow {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr) 104px;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+}
+
+.hlabel {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.hsub {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+}
+
+.htrack {
+  position: relative;
+  height: 14px;
+  border-radius: 0 4px 4px 0;
+  background: var(--surface-3);
+}
+
+.hfill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 0 4px 4px 0;
+  transition: width 600ms var(--ease);
+}
+
+.hmuted {
+  background: var(--grey);
+  opacity: 0.55;
+}
+
+.hlimit {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink-2);
+  border-radius: 1px;
+}
+
+.hval {
+  text-align: right;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .hrow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 4px;
+  }
+  .htrack {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* ---------- Columns ---------- */
+
+.colWrap {
+  position: relative;
+}
+
+.cols {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.baseLine {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.limitLine {
+  stroke: var(--bad);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+}
+
+.limitText {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--ink-2);
+}
+
+.col {
+  fill: var(--accent);
+  opacity: 0.38;
+  transition: opacity 140ms var(--ease);
+}
+
+.colHi {
+  opacity: 1;
+}
+
+.colHover {
+  opacity: 0.85;
+}
+
+.colVal {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  fill: var(--ink-2);
+  text-anchor: middle;
+}
+
+.colLabel {
+  font-family: var(--font-body);
+  font-size: 12px;
+  fill: var(--ink-3);
+  text-anchor: middle;
+}
+
+.colValHi {
+  fill: var(--ink);
+  font-weight: 600;
+}
+
+.colTip {
+  position: absolute;
+  top: 0;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 12.5px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: var(--shadow-pop);
+}
+
+/* ---------- Segmented bar ---------- */
+
+.seg {
+  display: flex;
+  gap: 2px;
+  height: 30px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.segPart {
+  display: block;
+  min-width: 3px;
+  transition: flex-grow 600ms var(--ease);
+}
+
+.segTexture {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--surface-3) 0 6px,
+    color-mix(in srgb, var(--surface-3) 60%, var(--line-strong)) 6px 7px
+  );
+}

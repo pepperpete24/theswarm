@@ -1,0 +1,135 @@
+/*
+ * Swarm Research Desk design tokens.
+ * Calm lab-notebook console: cool greys with a slight green tint, one teal accent.
+ * Status colours: green = agreed/published, amber = waiting for a person,
+ * red = challenged/rejected/withdrawn, grey = expired/paused, teal = running.
+ */
+:root {
+  --font-display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --rail-w: 252px;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --s-7: 48px;
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* Light */
+  --bg: #eff3f1;
+  --grid: rgba(20, 60, 52, 0.045);
+  --surface: #ffffff;
+  --surface-2: #f6f9f8;
+  --surface-3: #eaf0ed;
+  --ink: #13201d;
+  --ink-2: #43524e;
+  --ink-3: #6b7a76;
+  --line: #dbe3df;
+  --line-strong: #c3cfca;
+
+  --accent: #0b6e74;
+  --accent-ink: #ffffff;
+  --accent-soft: #e0efee;
+  --accent-line: #a9d3d2;
+
+  --good: #1d7547;
+  --good-soft: #e2f2e8;
+  --good-line: #a9d8bb;
+  --warn: #946000;
+  --warn-dot: #d4910f;
+  --warn-soft: #fbf0db;
+  --warn-line: #ecd09a;
+  --bad: #b2352b;
+  --bad-soft: #f9e5e2;
+  --bad-line: #eab4ad;
+  --grey: #66736f;
+  --grey-soft: #eceff0;
+  --grey-line: #d3d9d8;
+
+  --shadow-pop: 0 12px 32px -12px rgba(16, 40, 36, 0.28), 0 2px 6px rgba(16, 40, 36, 0.08);
+  --focus: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0b1211;
+    --grid: rgba(120, 200, 190, 0.035);
+    --surface: #111a18;
+    --surface-2: #15201d;
+    --surface-3: #1b2825;
+    --ink: #e3ece9;
+    --ink-2: #a7b6b1;
+    --ink-3: #7b8a85;
+    --line: #22302c;
+    --line-strong: #31433e;
+
+    --accent: #4fc1c6;
+    --accent-ink: #062022;
+    --accent-soft: #11302f;
+    --accent-line: #22595a;
+
+    --good: #63cf8f;
+    --good-soft: #12291c;
+    --good-line: #245a3b;
+    --warn: #f0b54e;
+    --warn-dot: #f0b54e;
+    --warn-soft: #2e230f;
+    --warn-line: #5f4718;
+    --bad: #f27a6e;
+    --bad-soft: #341815;
+    --bad-line: #6a2c26;
+    --grey: #8d9a96;
+    --grey-soft: #1b2422;
+    --grey-line: #2f3b38;
+
+    --shadow-pop: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.4);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0b1211;
+  --grid: rgba(120, 200, 190, 0.035);
+  --surface: #111a18;
+  --surface-2: #15201d;
+  --surface-3: #1b2825;
+  --ink: #e3ece9;
+  --ink-2: #a7b6b1;
+  --ink-3: #7b8a85;
+  --line: #22302c;
+  --line-strong: #31433e;
+
+  --accent: #4fc1c6;
+  --accent-ink: #062022;
+  --accent-soft: #11302f;
+  --accent-line: #22595a;
+
+  --good: #63cf8f;
+  --good-soft: #12291c;
+  --good-line: #245a3b;
+  --warn: #f0b54e;
+  --warn-dot: #f0b54e;
+  --warn-soft: #2e230f;
+  --warn-line: #5f4718;
+  --bad: #f27a6e;
+  --bad-soft: #341815;
+  --bad-line: #6a2c26;
+  --grey: #8d9a96;
+  --grey-soft: #1b2422;
+  --grey-line: #2f3b38;
+
+  --shadow-pop: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.4);
+
+  color-scheme: dark;
+}

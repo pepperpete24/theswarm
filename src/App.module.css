@@ -1,0 +1,38 @@
+.app {
+  min-height: 100vh;
+}
+
+.main {
+  margin-left: var(--rail-w);
+  min-width: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.content {
+  flex: 1;
+  outline: none;
+  padding-bottom: 120px;
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  z-index: 100;
+  padding: 8px 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-radius: 8px;
+}
+
+.skip:focus {
+  left: 8px;
+}
+
+@media (max-width: 760px) {
+  .main {
+    margin-left: 0;
+  }
+}
