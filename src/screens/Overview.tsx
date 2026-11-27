@@ -26,9 +26,10 @@ export function Overview() {
   const setTour = useSwarm((st) => st.setTourStep);
   const budget = summariseBudget(w.missions, w.members);
   const running = w.missions.filter(isRunning);
-  const selfStarted = w.missions.filter(
-    (m) => m.createdBy === 'Swarm' || m.createdBy.includes('Challenger'),
-  );
+  const bySwarm = (m: (typeof running)[number]) =>
+    m.createdBy === 'Swarm' || m.createdBy.includes('Challenger');
+  const runningSelf = running.filter(bySwarm).length;
+  const queuedSelf = w.missions.filter((m) => m.phase === 'queued').length;
   const ideas = Object.values(w.ideas);
   const testing = ideas.filter((i) => i.state === 'testing').length;
   const queued = ideas.filter((i) => i.state === 'queued' || i.state === 'proposed').length;
@@ -97,8 +98,9 @@ export function Overview() {
       <div className={s.autonomy} role="status">
         <Icon name="spark" size={16} />
         <span>
-          <strong>Running on its own:</strong> {running.length} missions ({selfStarted.length}{' '}
-          started by the swarm itself), {openPanels.length} panels in session
+          <strong>Running on its own:</strong> {running.length} missions running ({runningSelf}{' '}
+          started by the swarm itself), {queuedSelf} more queued by the swarm, {openPanels.length}{' '}
+          panels in session
           {lastPublished ? `, last publish ${lastPublished.publishedAt}` : ''}.
         </span>
       </div>

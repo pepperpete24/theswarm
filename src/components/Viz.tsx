@@ -86,7 +86,7 @@ export function IdeaField({
   const pos = (i: Idea) => {
     if (i.result) return { cx: x(i.result.netReturnDelta), cy: y(-i.result.drawdownDelta) };
     const k = waiting.indexOf(i);
-    const per = Math.max(1, Math.floor((W - padL - padR) / 18));
+    const per = Math.max(1, Math.floor((W - padL - padR - 190) / 18));
     return { cx: padL + 10 + (k % per) * 18, cy: 22 + Math.floor(k / per) * 14 };
   };
   const shown = [...waiting, ...tested];
@@ -113,7 +113,7 @@ export function IdeaField({
           rx={6}
           className={s.strip}
         />
-        <text x={padL - 2} y={stripH + 8} className={s.axisLabel}>
+        <text x={W - padR - 8} y={26} className={s.axisLabel} textAnchor="end">
           {waiting.length
             ? `Waiting to be tested (${waiting.length})`
             : 'Nothing waiting to be tested'}
@@ -143,7 +143,7 @@ export function IdeaField({
         <text x={W - padR} y={H - 4} className={s.axisLabel} textAnchor="end">
           Net return vs baseline, after costs →
         </text>
-        <text x={12} y={padT - 6} className={s.axisLabel}>
+        <text x={padL - 30} y={padT - 8} className={s.axisLabel}>
           ↑ Smaller drawdown
         </text>
         {shown.map((i) => {

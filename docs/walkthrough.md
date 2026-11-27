@@ -1,110 +1,105 @@
 # Presenting the Swarm Research Desk demo
 
-A click-by-click script for showing the demo live. It follows the same eight stops as the
-in-app **Take the tour** button, so you can either click along with the tour card or drive it
-yourself.
+A click-by-click script for showing the demo live. It follows the same 11 stops as the in-app
+**Take the tour** button, so you can click along with the tour card or drive it yourself. Allow
+about 10 minutes. Reload the page first so everything starts fresh.
 
-**Time needed:** about 6 minutes.
-**Before you start:** reload the page so everything is back to the starting data. Nothing is
-saved, so a reload always gives you a clean demo.
+## The 30-second opener: what makes this different
 
-> Tip: the tour card has a **Fast simulation** box. Tick it if you are short on time and the
-> new job will finish in about 8 seconds instead of 23.
+> “Most AI research tools are one model answering one question. This is a swarm. Members lend
+> their own agents, and give it a goal and a few rules. The whole swarm explores at once, code
+> tests every idea, a council of agents tears the ideas apart and looks for better routes, and
+> another panel of agents decides what gets published. Nobody has to click approve. Then it
+> keeps trying to beat its own best answer, and it learns from its failures as much as its
+> wins.”
 
----
+## 1. Overview: a swarm, not a relay
 
-## 1. Overview: what the swarm is
+- Point at the green **Running on its own** strip: missions running, some started by the swarm
+  itself, panels in session.
+- The **M-12 funnel**: 47 ideas from 11 members, down to 2 that held up on fresh data.
+- **What the swarm learned this week**: proven findings and dead ends side by side.
+- Press **Take the tour**.
 
-1. Open the demo link. You land on **Overview**.
-2. Read the headline: *“Research you can check, not just trust.”*
-3. Say: “This is a research club. Each member lends their own computer and AI, Claude or
-   Codex, to a shared pool. The pilot studies one market only: the euro against the US dollar.”
-4. Point at the four tiles: jobs in progress (out of a limit of 20), jobs waiting for a person,
-   money spent today (out of $25), and how many members are online.
-5. Point at **How one question becomes a published finding**. Hover over a few steps to show
-   the plain explanations.
-6. Click **Take the tour** if you want the tour card to follow along.
+## 2. M-12: one mission, 47 ideas
 
-## 2. Ask a question
+- Each dot in the **idea field** is an idea from a member’s agent. Right means more return than
+  the current best; up means smaller drawdown. Diamonds are alternatives, rings are the
+  Pathfinder’s different routes.
+- The dashed line is the **bar to beat**. Say: “The more ideas you try, the more likely one looks
+  good by luck. So the bar rises with every trial.”
+- Note the red dots far to the right: good-looking ideas the council rejected anyway.
 
-1. Click **Ask a question** in the side rail (or **Ask for me** on the tour card).
-2. Click the example chip **“How did EURUSD react to the last ECB rate statement?”**, then
-   **Send to the swarm**.
-3. A green banner says **Already studied**. Say: “The swarm already answered this, so you
-   get the answer for free and nothing new is spent.”
-4. Optional: type `40` in **Most it may cost** and send again. A red banner explains it is
-   over budget and how to fix it. Put the amount back to `1.50`.
-5. Click the chip **“Is EURUSD more volatile on Fridays than on other weekdays?”** and click
-   **Send to the swarm**.
+## 3. The council (C-12-1)
 
-## 3. Watch the job run
+- **Objections raised**: the red team upheld two. The machine-learned stop was overfitted after
+  1,200 tries; the Friday-close stop used a price that wasn’t known yet.
+- **New combinations and alternatives**: the synthesiser turned the overfitted model into a
+  _cheaper route_, a simple rule that gets about 90% of the gain.
+- Say: “Verdicts come from code-checked gates, not votes. Agreement between agents is never
+  evidence.”
 
-You are taken straight to the new job’s page (for example **J-1048**).
+## 4. The family tree
 
-1. Watch the **step bar** fill in. The amber segment is the current step.
-2. When it says *Researching*, point at the green dot: **“Checking in every 15 s · lease
-   renews every 60 s.”** Say: “If this computer goes quiet, the job is taken back and given to
-   someone else.”
-3. Point at **The two answers**. The first answer appears on the left. Then a *different*
-   member’s AI re-checks it on the right, without seeing the first answer.
-4. The big number in the middle turns green at **93%**. The bar is 90%.
-5. Scroll down to the **Run receipt**. Read the last line aloud: the signature proves which
-   computer sent it, not that it is right. The re-check does that.
+- On the M-12 **Family tree** tab, follow I-12-07 (rejected) to I-12-41 (held up): a rejected
+  idea led to a winner.
+- The red dashed line is the **depth limit**: alternatives of alternatives stop there.
 
-After about 23 seconds a message pops up: *“J-1048 agreed and is waiting for you.”*
+## 5. Start a mission
 
-## 4. Review desk: a person decides
+- On **New mission**, press **Launch for me** on the tour card (or pick the take-profit example
+  chip and press **Launch the mission**).
+- Before it launches, show **The library already knows…**: a dead end it won’t repeat, a method
+  it will reuse, and the current best it must beat.
+- Optional: tick a demo option such as **Panel rejects** to show a panel sending a draft back.
 
-1. Click **Open the review desk** in the message, or **Review desk** in the rail.
-2. Say: “No AI can publish. A person reads both answers and the editor AI’s draft.”
-3. Optionally type a note, then click **Approve and publish** on your new job.
+## 6. Watch the whole swarm work
 
-## 5. Published: what viewers see
+- On the live mission page (2× or 4× speed), ideas arrive from many members, including the
+  Pathfinder. Grey dots wait in the strip at the top and move into place once tested.
+- The **jobs at once** line shows the shared 20-job limit; extra ideas queue.
+- The council seats, objections appear, alternatives arrive as diamonds, and the shortlist goes
+  to the fresh-data check. One idea won’t hold up: that’s expected and honest.
 
-1. Click **See what viewers see** in the message, or **Published findings** in the rail.
-2. Point at the four facts: **Observed · Published · Expires · Proven wrong if**.
-3. Click the **Expired** and **Withdrawn** filters. Say: “Losing, expired or withdrawn
-   results are never hidden.”
+## 7. The council approves
 
-## 6. Budgets: where the money went
+- On **Council approvals**, watch five approvers across two providers vote, each with a reason.
+  One asks for softer wording and the editor tightens the draft.
+- Say: “Nobody here worked on it, and there are no approve buttons on this page. Even the owner
+  can’t publish.”
+- Lower down: the **Red team v4** promotion and the **approval rule v3** rule-change panel (7
+  seats, 6 of 7 needed) are voting too.
 
-1. Click **Budgets**.
-2. Point at the **Today** bar: spent, set aside for running jobs, and free.
-3. Say: “Every job sets aside the most it may cost before it starts. A job is refused if it
-   would pass the $25 daily limit or the member’s own $5 limit.”
-4. Point at **Last 7 days** and the dashed limit line.
+## 8. Library: it remembers, including the failures
 
-## 7. Contributors: members stay in control
+- New entries from your mission: what was proven, the overfitting dead end, the warning from
+  the idea that didn’t hold up, and an open question.
+- **Start a mission from this** on an open question shows how the swarm keeps going.
 
-1. Click **Contributors**.
-2. Click **Pause** next to **Gustavo R.** A message confirms their AI gets no new jobs.
-3. Read the three cards: the program only calls out, members set their own limits, and only
-   findings that pass a re-check earn credit.
-4. Click **Resume** to put them back.
+## 9. Improvement: every result is there to be beaten
 
-## 8. Audit trail: a record that can’t be changed quietly
+- **Breakout take-profit** now has a new current best from your mission, and the Challenger has
+  already queued a challenge to it, waiting for fresh data.
+- **Approval rule**: v2 was adopted by a 7-seat panel; one proposal was refused by code for going
+  below the floor; v3 is being voted on now.
+- **Process changes**: point at the rejected and rolled-back ones. “Failures stay visible.”
 
-1. Click **Audit trail**. Every step you just did is at the top, newest first.
-2. Click **Check the chain**. Green: *“Chain intact.”*
-3. Click **Try changing an old entry**. This quietly changes entry 8 from *agree (96%)* to
-   *agree (99%)* without updating its fingerprint.
-4. Click **Check the chain** again. Red: *“Chain broken at entry 8.”* Entry 8 and every entry
-   after it turn red.
-5. Say: “This is the ‘blockchain’ part. There’s no token or coin. It is just a record where
-   a quiet change is always caught.”
-6. Click **Undo the change**. The chain is intact again.
+## 10. Scoreboard: does it earn its keep?
 
----
+- Toggle **Same budget** and **Full capacity**. The whole swarm finds the most and catches the
+  most false wins, but costs the most; at the same budget it only narrowly beats a small team.
+- Say: “We show the honest numbers. More agents are only added when they measurably help.”
 
-## Optional extras
+## 11. Audit trail
 
-- **Show a challenge:** on *Ask a question*, tick **Show a challenge** before sending. The
-  re-check disagrees (74%), the job goes back to a different member and runs again, then
-  agrees at 95%.
-- **Simulate a dropped connection:** tick **Simulate a dropped connection**. After a few
-  seconds the computer stops checking in, its lease runs out, the late result is refused and
-  the job moves to someone else. Both leave entries in the audit trail.
-- **Dark mode:** use the three small buttons at the bottom of the side rail (match my device,
-  light, dark).
+- Press **Try changing an old entry** (it changes entry 8, a council verdict, from “rejected” to
+  “promising” without updating its fingerprint), then **Check the chain**: it breaks at entry 8.
+- Press **Undo the change**: intact again.
+- Close: “While we talked, the swarm queued its next missions by itself.” Open **Missions** to
+  show the self-started ones.
 
-*Research only, not financial advice. All names, devices, prices and results are made up.*
+## If something goes wrong
+
+- Reload the page to reset everything.
+- The **Emergency stop** at the bottom of the side bar pauses all work and publishing; press
+  **Release the stop** to carry on.
