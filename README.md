@@ -82,7 +82,7 @@ src/
   screens/     One file per screen
   styles/      tokens.css (colours, fonts, light and dark) and global.css
   test/        Vitest tests for the logic, the store and the screens
-BUILD-BRIEF.md                 The brief this app was built from
+BUILD-BRIEF.md                 The current build brief (v2, council swarm)
 ```
 
 ## Changing the mock data
@@ -140,7 +140,7 @@ or placing orders, and any blockchain, token or wallet.
 ## Contributing
 
 1. Create a branch from `main`.
-2. Make your change. Keep on-screen words plain and friendly (see section 8 of
+2. Make your change. Keep on-screen words plain and friendly (see section 9 of
    `BUILD-BRIEF.md`).
 3. Run `npm run lint`, `npm test` and `npm run build` before you push. All three must pass.
 4. Open a pull request against `main`. Merging it deploys the demo.
