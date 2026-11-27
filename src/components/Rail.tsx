@@ -1,17 +1,38 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useSwarm, type Theme } from '../store/useSwarm';
 import { Icon, type IconName } from './Icon';
 import s from './Rail.module.css';
 
-const NAV: { to: string; label: string; icon: IconName; end?: boolean }[] = [
-  { to: '/', label: 'Overview', icon: 'overview', end: true },
-  { to: '/ask', label: 'Ask a question', icon: 'ask' },
-  { to: '/board', label: 'Work board', icon: 'board' },
-  { to: '/review', label: 'Review desk', icon: 'review' },
-  { to: '/published', label: 'Published findings', icon: 'published' },
-  { to: '/budgets', label: 'Budgets', icon: 'budget' },
-  { to: '/contributors', label: 'Contributors', icon: 'people' },
-  { to: '/audit', label: 'Audit trail', icon: 'chain' },
+type NavItem = { to: string; label: string; icon: IconName; end?: boolean };
+
+const GROUPS: { title: string; items: NavItem[] }[] = [
+  {
+    title: 'Work',
+    items: [
+      { to: '/', label: 'Overview', icon: 'overview', end: true },
+      { to: '/new', label: 'New mission', icon: 'target' },
+      { to: '/missions', label: 'Missions', icon: 'missions' },
+      { to: '/approvals', label: 'Council approvals', icon: 'council' },
+    ],
+  },
+  {
+    title: 'Knowledge',
+    items: [
+      { to: '/library', label: 'Library', icon: 'book' },
+      { to: '/improvement', label: 'Improvement', icon: 'trend' },
+      { to: '/scoreboard', label: 'Scoreboard', icon: 'scale' },
+      { to: '/published', label: 'Published', icon: 'published' },
+    ],
+  },
+  {
+    title: 'Running the swarm',
+    items: [
+      { to: '/contributors', label: 'Contributors', icon: 'people' },
+      { to: '/budgets', label: 'Budgets', icon: 'budget' },
+      { to: '/audit', label: 'Audit trail', icon: 'chain' },
+    ],
+  },
 ];
 
 export function Logo({ size = 34 }: { size?: number }) {
@@ -55,8 +76,56 @@ function ThemeToggle() {
   );
 }
 
+/** The owner's one safety control. Confirms inside the page, never with a browser dialog. */
+function EmergencyStop() {
+  const stopped = useSwarm((st) => st.stopped);
+  const stop = useSwarm((st) => st.emergencyStop);
+  const release = useSwarm((st) => st.releaseStop);
+  const [confirm, setConfirm] = useState(false);
+  if (stopped)
+    return (
+      <div className={s.stopOn} role="status">
+        <strong>
+          <Icon name="stop" size={15} /> Emergency stop is on
+        </strong>
+        <span>No new work, no publishing.</span>
+        <button type="button" className="btn btn-sm" onClick={release}>
+          Release the stop
+        </button>
+      </div>
+    );
+  if (confirm)
+    return (
+      <div className={s.stopConfirm}>
+        <span>Stop all new work and publishing?</span>
+        <div className="row" style={{ gap: 6 }}>
+          <button
+            type="button"
+            className="btn btn-sm btn-bad"
+            onClick={() => {
+              stop();
+              setConfirm(false);
+            }}
+          >
+            Yes, stop
+          </button>
+          <button type="button" className="btn btn-sm btn-ghost" onClick={() => setConfirm(false)}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  return (
+    <button type="button" className={s.stopBtn} onClick={() => setConfirm(true)}>
+      <Icon name="stop" size={15} /> Emergency stop
+    </button>
+  );
+}
+
 export function Rail() {
-  const waiting = useSwarm((st) => st.jobs.filter((j) => j.state === 'human').length);
+  const inSession = useSwarm(
+    (st) => Object.values(st.world.panels).filter((p) => !p.outcome).length,
+  );
   return (
     <aside className={s.rail}>
       <div className={s.brand}>
@@ -70,21 +139,26 @@ export function Rail() {
         </div>
       </div>
       <nav aria-label="Main" className={s.nav}>
-        {NAV.map((n) => (
-          <NavLink
-            key={n.to}
-            to={n.to}
-            end={n.end}
-            className={({ isActive }) => `${s.link} ${isActive ? s.active : ''}`}
-          >
-            <Icon name={n.icon} size={17} />
-            <span>{n.label}</span>
-            {n.to === '/review' && waiting > 0 && (
-              <span className={s.badge} aria-label={`${waiting} waiting`}>
-                {waiting}
-              </span>
-            )}
-          </NavLink>
+        {GROUPS.map((g) => (
+          <div key={g.title} className={s.group}>
+            <span className={s.groupTitle}>{g.title}</span>
+            {g.items.map((n) => (
+              <NavLink
+                key={n.to}
+                to={n.to}
+                end={n.end}
+                className={({ isActive }) => `${s.link} ${isActive ? s.active : ''}`}
+              >
+                <Icon name={n.icon} size={17} />
+                <span>{n.label}</span>
+                {n.to === '/approvals' && inSession > 0 && (
+                  <span className={s.badge} aria-label={`${inSession} panels in session`}>
+                    {inSession}
+                  </span>
+                )}
+              </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
       <div className={s.foot}>
@@ -94,13 +168,14 @@ export function Rail() {
           </span>
           <span>
             <strong>You</strong>
-            <span className="muted"> · publisher</span>
+            <span className="muted"> · owner</span>
           </span>
         </div>
         <p className={s.note}>
           Demo with made-up data. Nothing here is real or saved; reload to reset. Signed in as You,
-          publisher.
+          owner. The council makes the decisions.
         </p>
+        <EmergencyStop />
         <ThemeToggle />
       </div>
     </aside>

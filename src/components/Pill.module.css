@@ -64,3 +64,21 @@
   background: var(--accent-soft);
   border-color: var(--accent-line);
 }
+
+.info {
+  color: var(--info);
+  background: var(--info-soft);
+  border-color: var(--info-line);
+}
+
+.dead {
+  color: var(--grey);
+  background: transparent;
+  border: 1.5px dashed var(--grey);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}

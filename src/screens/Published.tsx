@@ -1,73 +1,84 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import type { Job } from '../domain/types';
 import { Icon } from '../components/Icon';
-import { JobPill } from '../components/Pill';
-import { useSwarm } from '../store/useSwarm';
+import { MissionPill } from '../components/Pill';
+import { barToBeat } from '../domain/gates';
+import type { Mission } from '../domain/types';
+import { ideasOf, useWorld } from './hooks';
 import s from './screens.module.css';
 
 type Filter = 'all' | 'current' | 'expired' | 'withdrawn';
 
-const FILTERS: { key: Filter; label: string; test: (j: Job) => boolean }[] = [
+const isPub = (m: Mission) => m.phase === 'published' || m.phase === 'learned';
+
+const FILTERS: { key: Filter; label: string; test: (m: Mission) => boolean }[] = [
   { key: 'all', label: 'All', test: () => true },
-  { key: 'current', label: 'Current', test: (j) => j.state === 'published' && !j.expired },
-  { key: 'expired', label: 'Expired', test: (j) => j.state === 'published' && !!j.expired },
-  { key: 'withdrawn', label: 'Withdrawn', test: (j) => j.state === 'withdrawn' },
+  { key: 'current', label: 'Current', test: (m) => isPub(m) && !m.expired },
+  { key: 'expired', label: 'Expired', test: (m) => isPub(m) && !!m.expired },
+  { key: 'withdrawn', label: 'Withdrawn', test: (m) => m.phase === 'withdrawn' },
 ];
 
-function Post({ job }: { job: Job }) {
-  const withdrawn = job.state === 'withdrawn';
+function Post({ m }: { m: Mission }) {
+  const w = useWorld();
+  const withdrawn = m.phase === 'withdrawn';
+  const tested = ideasOf(m, w.ideas).filter((i) => i.result).length;
+  const panel = m.approvalId ? w.panels[m.approvalId] : undefined;
+  const providers = panel ? new Set(panel.approvers.map((a) => a.provider)).size : 2;
   return (
-    <article className={`panel ${s.post}`} aria-labelledby={`p-${job.id}`}>
+    <article className={`panel ${s.post}`} aria-labelledby={`p-${m.id}`}>
       <div className={s.postHead}>
         <div>
-          <span className="eyebrow">EURUSD · {job.role}</span>
-          <h2 id={`p-${job.id}`}>{job.question}</h2>
+          <span className="eyebrow">EURUSD · {m.id}</span>
+          <h2 id={`p-${m.id}`}>{m.title}</h2>
         </div>
-        <JobPill job={job} />
+        <MissionPill mission={m} />
       </div>
       <p
-        className={`${s.postText} ${withdrawn || job.expired ? s.faded : ''} ${withdrawn ? s.struck : ''}`}
+        className={`${s.postText} ${withdrawn || m.expired ? s.faded : ''} ${withdrawn ? s.struck : ''}`}
       >
-        {job.draft}
+        {m.draft}
       </p>
-      {withdrawn && job.withdrawnNote && (
+      {withdrawn && m.withdrawnNote && (
         <div className="banner banner-bad">
           <Icon name="alert" />
           <div className="banner-body">
-            <strong>Withdrawn</strong>
-            <span>{job.withdrawnNote}</span>
+            <strong>Withdrawn by the council</strong>
+            <span>{m.withdrawnNote}</span>
           </div>
         </div>
       )}
       <dl className="kv">
         <div>
           <dt>Observed</dt>
-          <dd className="num">{job.observedAt ?? '—'}</dd>
+          <dd className="num">{m.observedAt ?? '—'}</dd>
         </div>
         <div>
           <dt>Published</dt>
-          <dd className="num">{job.publishedAt ?? '—'}</dd>
+          <dd className="num">{m.publishedAt ?? '—'}</dd>
         </div>
         <div>
           <dt>Expires</dt>
           <dd className="num">
-            {job.expiresAt ?? '—'}
-            {job.expired && <span className="muted"> (expired)</span>}
+            {m.expiresAt ?? '—'}
+            {m.expired && <span className="muted"> (expired)</span>}
           </dd>
         </div>
         <div>
           <dt>Proven wrong if</dt>
-          <dd>{job.provenWrongIf ?? '—'}</dd>
+          <dd>{m.provenWrongIf ?? '—'}</dd>
         </div>
       </dl>
       <p className={s.postFoot}>
         <span className={s.seal}>
-          <Icon name="check" size={15} /> Checked by two independent AIs ({job.agreement}%
-          agreement)
+          <Icon name="check" size={15} /> Chosen from {tested} ideas tested by the swarm
         </span>
-        <span>and approved by a person.</span>
-        <Link to={`/jobs/${job.id}`}>See the evidence</Link>
+        <span>
+          , cleared a bar that rose with every test ({barToBeat(m.trialsRun)} pts), held up on fresh
+          data run by a member who wasn’t involved, and was approved by a council panel of{' '}
+          {panel?.approvers.length ?? 5} members across {providers} AI providers, none of whom
+          worked on it (approval rule v{m.approvalRuleVersion ?? 1}).
+        </span>
+        <Link to={`/missions/${m.id}`}>See the evidence</Link>
         <span className="muted">· Research only, not financial advice.</span>
       </p>
     </article>
@@ -75,8 +86,8 @@ function Post({ job }: { job: Job }) {
 }
 
 export function Published() {
-  const jobs = useSwarm((st) => st.jobs);
-  const all = jobs.filter((j) => j.state === 'published' || j.state === 'withdrawn');
+  const w = useWorld();
+  const all = w.missions.filter((m) => isPub(m) || m.phase === 'withdrawn');
   const [filter, setFilter] = useState<Filter>('all');
   const f = FILTERS.find((x) => x.key === filter)!;
   const list = all.filter(f.test);
@@ -87,7 +98,7 @@ export function Published() {
           <span className="eyebrow">What viewers see</span>
           <h1>Published findings</h1>
           <p className="lede">
-            Every post here was checked by two AIs and approved by a person. Expired and withdrawn
+            Every post was chosen by the swarm and approved by the council. Expired and withdrawn
             posts stay visible: losing or withdrawn results are never hidden.
           </p>
         </div>
@@ -110,7 +121,7 @@ export function Published() {
           <p className="muted">Nothing here yet.</p>
         </div>
       ) : (
-        list.map((j) => <Post key={j.id} job={j} />)
+        list.map((m) => <Post key={m.id} m={m} />)
       )}
       <p className="footnote">
         Research only, not financial advice. Nothing on this page is a trading signal or a

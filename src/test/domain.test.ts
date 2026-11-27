@@ -1,209 +1,352 @@
 import { describe, expect, it } from 'vitest';
-import { admit, eligibleMembers, summariseBudget } from '../domain/budget';
-import { findStudied, normaliseQuestion } from '../domain/dedupe';
-import { isAgreed, verdict } from '../domain/agreement';
-import {
-  GENESIS,
-  appendEntry,
-  buildChain,
-  repairEntry,
-  tamperEntry,
-  verifyChain,
-} from '../domain/auditChain';
-import { MANIFEST_FIELDS, buildManifest } from '../domain/manifest';
-import { planTicks } from '../domain/simulator';
-import { seedJobs } from '../data/jobs';
-import { seedMembers } from '../data/members';
 import { TAMPER_FROM, TAMPER_INDEX, TAMPER_TO, seedAudit } from '../data/audit';
-import { EXAMPLE_FRESH, EXAMPLE_STUDIED } from '../data/constants';
+import { EXAMPLE_FRESH, EXAMPLE_RUNNING, RULE_CHANGE_PANEL } from '../data/constants';
+import { seedRules } from '../data/knowledge';
 import { makePrices } from '../data/prices';
+import { seedWorld } from '../data/seed';
+import {
+  belowFloor,
+  decidePublish,
+  decideRuleChange,
+  providerOf,
+  seatApprovalPanel,
+  seatRuleChangePanel,
+} from '../domain/approval';
+import { GENESIS, buildChain, repairEntry, tamperEntry, verifyChain } from '../domain/auditChain';
+import { admitMission, summariseBudget } from '../domain/budget';
+import { adopt, followUp, meetsRuleChangeRule, replayable, screen } from '../domain/coach';
+import { judgesFor, redTeamFor, seatCouncil } from '../domain/council';
+import { matchDeadEnds, mergeDuplicates } from '../domain/dedupe';
+import { missionFunnel } from '../domain/funnel';
+import { applyGates, barToBeat, heldUp, verdictFor } from '../domain/gates';
+import {
+  canReplaceBest,
+  currentBest,
+  dueChallenges,
+  replaceBest,
+  restorePrevious,
+} from '../domain/improvement';
+import { checkLibrary } from '../domain/library';
+import { canSpawn, lineageMembers } from '../domain/lineage';
+import { RECEIPT_FIELDS, buildReceipt } from '../domain/manifest';
+import { planMission } from '../domain/simulator';
+import type { ApprovalPanel, Idea, ProcessChange } from '../domain/types';
+
+const { world } = seedWorld();
+const idea = (id: string) => world.ideas[id];
+const active = seedRules.find((r) => r.status === 'active')!;
+
+describe('seed consistency', () => {
+  it('funnel counts always equal the idea states for M-12', () => {
+    const m = world.missions.find((x) => x.id === 'M-12')!;
+    const f = missionFunnel(m.ideaIds.map((id) => world.ideas[id]));
+    expect(f).toMatchObject({
+      proposed: 47,
+      removed: 8,
+      tested: 38,
+      passed: 9,
+      shortlisted: 3,
+      heldUp: 2,
+    });
+  });
+
+  it('every objection references a real idea and every library entry a real mission', () => {
+    for (const i of Object.values(world.ideas))
+      for (const o of i.objections) expect(world.ideas[o.ideaId]).toBeDefined();
+    const ids = new Set(world.missions.map((m) => m.id));
+    for (const e of world.library) expect(ids.has(e.fromMissionId)).toBe(true);
+  });
+
+  it('each topic has exactly one current best', () => {
+    for (const t of world.topics)
+      expect(t.history.filter((h) => h.status === 'current')).toHaveLength(1);
+  });
+
+  it('leaves enough free budget for a $40 mission', () => {
+    expect(summariseBudget(world.missions, world.members).free).toBeGreaterThanOrEqual(40);
+  });
+
+  it('prices are seeded', () => {
+    expect(makePrices()).toEqual(makePrices());
+  });
+});
 
 describe('budget', () => {
-  const jobs = seedJobs();
-  const members = seedMembers;
-
-  it('adds up spent, set aside and free to the daily limit', () => {
-    const b = summariseBudget(jobs, members);
-    expect(b.cap).toBe(25);
-    expect(b.spent + b.setAside + b.free).toBeCloseTo(25, 2);
-    expect(b.setAside).toBeGreaterThan(0);
-  });
-
-  it('admits a normal job', () => {
-    expect(admit(1.5, jobs, members)).toEqual({ ok: true });
-  });
-
-  it('refuses a job above the free budget with a reason and a fix', () => {
-    const r = admit(20, jobs, members);
+  it('admits a normal mission and refuses one above the free budget with a fix', () => {
+    expect(admitMission(40, world.missions, world.members)).toEqual({ ok: true });
+    const r = admitMission(500, world.missions, world.members);
     expect(r.ok).toBe(false);
-    if (!r.ok) {
-      expect(r.reason).toMatch(/only \$\d+\.\d\d of today's \$25 limit is free/);
-      expect(r.fix).toMatch(/Lower the most it may cost/);
+    if (!r.ok) expect(r.fix).toMatch(/Lower the budget/);
+  });
+});
+
+describe('library check', () => {
+  it('finds a running mission with the same goal', () => {
+    expect(
+      checkLibrary(EXAMPLE_RUNNING, world.library, world.missions, world.topics).running?.id,
+    ).toBe('M-12');
+  });
+
+  it('finds the take-profit topic, a dead end and a reusable method for the fresh example', () => {
+    const c = checkLibrary(EXAMPLE_FRESH, world.library, world.missions, world.topics);
+    expect(c.running).toBeUndefined();
+    expect(c.topic?.id).toBe('T-4');
+    expect(c.deadEnds.map((e) => e.id)).toContain('L-022');
+    expect(c.reuse.length).toBeGreaterThan(0);
+  });
+});
+
+describe('dedupe and dead ends', () => {
+  const base = idea('I-12-01');
+  const mk = (id: string, key: string): Idea => ({ ...base, id, key, state: 'proposed' });
+  it('merges near-duplicates into the first proposer', () => {
+    const m = mergeDuplicates([mk('a', 'k1'), mk('b', 'k2'), mk('c', 'k1')]);
+    expect([...m.entries()]).toEqual([['c', 'a']]);
+  });
+  it('flags ideas that match a library dead end', () => {
+    expect(matchDeadEnds([mk('x', 'sl-fixed-25')], world.library).get('x')?.id).toBe('L-014');
+  });
+});
+
+describe('gates', () => {
+  it('the bar to beat rises with the number of trials', () => {
+    expect(barToBeat(1)).toBe(0.6);
+    expect(barToBeat(100)).toBeLessThan(barToBeat(1000));
+    expect(barToBeat(2900)).toBeCloseTo(1.8, 1);
+  });
+
+  it('gives the brief’s verdicts on the named M-12 ideas', () => {
+    const t = world.missions.find((m) => m.id === 'M-12')!.trialsRun;
+    expect(verdictFor(idea('I-12-01'), t).verdict).toBe('promising');
+    expect(verdictFor(idea('I-12-03'), t).verdict).toBe('needs-evidence');
+    expect(verdictFor(idea('I-12-07'), t).verdict).toBe('rejected');
+    expect(verdictFor(idea('I-12-08'), t).verdict).toBe('rejected');
+    expect(verdictFor(idea('I-12-14'), t).reason).toMatch(/Objection upheld/);
+    expect(applyGates(idea('I-12-40'), t).every((g) => g.pass)).toBe(true);
+  });
+
+  it('held up means it still beats the baseline and keeps half its gain', () => {
+    expect(heldUp(idea('I-12-40'))).toBe(true);
+    expect(heldUp(idea('I-12-42'))).toBe(false);
+  });
+});
+
+describe('council', () => {
+  it('seats seven different members and nobody judges their own lineage', () => {
+    const panel = seatCouncil(world.members, 3);
+    expect(new Set(panel.map((p) => p.memberId)).size).toBe(panel.length);
+    for (const id of ['I-12-40', 'I-12-41', 'I-12-07']) {
+      const lineage = lineageMembers(id, world.ideas);
+      for (const j of judgesFor(id, panel, world.ideas))
+        expect(lineage.has(j.memberId)).toBe(false);
+      const red = redTeamFor(id, panel, world.ideas);
+      if (red) expect(lineage.has(red)).toBe(false);
     }
   });
 
-  it('refuses zero or negative amounts', () => {
-    expect(admit(0, jobs, members).ok).toBe(false);
-    expect(admit(-1, jobs, members).ok).toBe(false);
-  });
-
-  it('only offers work to online members with room under their own limit', () => {
-    const ids = eligibleMembers(members, 1.5).map((m) => m.id);
-    expect(ids).not.toContain('freya');
-    expect(ids).not.toContain('hana');
-    expect(ids).toContain('aroha');
-    // Chen has spent $3.15, so a $2 job would pass the $5 member limit
-    expect(eligibleMembers(members, 2).map((m) => m.id)).not.toContain('chen');
-  });
-
-  it('refuses when no member has room', () => {
-    const r = admit(4.9, jobs, members);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.reason).toMatch(/No online member/);
+  it('lineage includes every ancestor’s proposer; spawning stops at the depth limit', () => {
+    expect([...lineageMembers('I-12-40', world.ideas)].sort()).toEqual([
+      'aroha',
+      'emeka',
+      'gustavo',
+    ]);
+    expect(canSpawn(1, 2)).toBe(true);
+    expect(canSpawn(2, 2)).toBe(false);
   });
 });
 
-describe('already studied?', () => {
-  const jobs = seedJobs();
-  it('matches published questions regardless of case and spacing', () => {
-    expect(findStudied(EXAMPLE_STUDIED, jobs)?.id).toBe('J-1039');
-    expect(findStudied('  how did eurusd react to the LAST ecb rate statement ', jobs)?.id).toBe(
-      'J-1039',
+describe('approval panels', () => {
+  it('seats 5 approvers across at least 2 providers, none excluded, none over 60%', () => {
+    const excluded = new Set(['aroha', 'gustavo', 'ines', 'dana']);
+    const a = seatApprovalPanel(world.members, excluded, active)!;
+    expect(a).toHaveLength(5);
+    expect(new Set(a.map((x) => x.provider)).size).toBeGreaterThanOrEqual(2);
+    for (const x of a) expect(excluded.has(x.memberId)).toBe(false);
+    const per = new Map<string, number>();
+    for (const x of a) per.set(x.provider, (per.get(x.provider) ?? 0) + 1);
+    for (const n of per.values()) expect(n).toBeLessThanOrEqual(3);
+  });
+
+  it('fails clearly when two providers can’t be seated', () => {
+    const claudeOnly = world.members.map((m) =>
+      providerOf(m.model) === 'OpenAI' ? { ...m, online: false } : m,
+    );
+    expect(seatApprovalPanel(claudeOnly, new Set(), active)).toBeNull();
+  });
+
+  const panel = (votes: ('approve' | 'reject' | 'rule')[], needed = 4): ApprovalPanel => ({
+    id: 'X',
+    purpose: 'publish',
+    subjectId: 'M-1',
+    ideaIds: [],
+    ruleVersion: 2,
+    needed,
+    approvers: votes.map((v, i) => ({
+      memberId: String(i),
+      provider: 'A',
+      vote: v === 'rule' ? 'reject' : v,
+      citesRule: v === 'rule' ? 8 : undefined,
+    })),
+  });
+
+  it('publishes on 4 of 5 with no rule-citing reject', () => {
+    expect(decidePublish(panel(['approve', 'approve', 'reject', 'approve', 'approve']))).toBe(
+      'published',
+    );
+    expect(decidePublish(panel(['approve', 'approve', 'rule', 'approve', 'approve']))).toBe(
+      'sent-back',
+    );
+    expect(decidePublish(panel(['approve', 'reject', 'reject', 'approve', 'approve']))).toBe(
+      'sent-back',
     );
   });
-  it('matches jobs waiting for a person', () => {
-    expect(
-      findStudied('Which stop-loss distance works best for 15-minute EURUSD trades?', jobs)?.id,
-    ).toBe('J-1043');
-  });
-  it('does not match fresh, withdrawn or running questions', () => {
-    expect(findStudied(EXAMPLE_FRESH, jobs)).toBeUndefined();
-    expect(
-      findStudied('Is the Monday-morning gap in EURUSD usually filled by Tuesday?', jobs),
-    ).toBeUndefined();
-    expect(
-      findStudied('Does the London open move EURUSD more than the New York open?', jobs),
-    ).toBeUndefined();
-    expect(findStudied('   ', jobs)).toBeUndefined();
-  });
-  it('normalises', () => {
-    expect(normaliseQuestion('  A  b?? ')).toBe('a b');
+
+  it('rule-change panels: 7 seats, no Coach, at most 4 per provider, 6 of 7 needed', () => {
+    const excluded = new Set(['omar']);
+    const a = seatRuleChangePanel(world.members, excluded)!;
+    expect(a).toHaveLength(RULE_CHANGE_PANEL.size);
+    expect(a.map((x) => x.memberId)).not.toContain('chen');
+    expect(a.map((x) => x.memberId)).not.toContain('omar');
+    const per = new Map<string, number>();
+    for (const x of a) per.set(x.provider, (per.get(x.provider) ?? 0) + 1);
+    expect(per.size).toBeGreaterThanOrEqual(2);
+    for (const n of per.values()) expect(n).toBeLessThanOrEqual(4);
+    const p = (n: number): ApprovalPanel => ({
+      ...panel(Array.from({ length: 7 }, (_, i) => (i < n ? 'approve' : 'reject'))),
+      purpose: 'rule-change',
+      needed: 6,
+    });
+    expect(decideRuleChange(p(6))).toBe('adopted');
+    expect(decideRuleChange(p(5))).toBe('rejected');
   });
 });
 
-describe('agreement rule', () => {
-  it('agrees at the 90% bar and above', () => {
-    expect(isAgreed(90)).toBe(true);
-    expect(isAgreed(96)).toBe(true);
-    expect(isAgreed(89)).toBe(false);
-    expect(verdict(74)).toBe('challenged');
-    expect(verdict(undefined)).toBe('running');
+describe('approval-rule changes (section 6.5)', () => {
+  const change = (over: Partial<ProcessChange>): ProcessChange => ({
+    id: 'PC-99',
+    change: 'x',
+    why: 'y',
+    kind: 'approval-rule',
+    learnedFrom: ['M-09'],
+    replayedOn: [],
+    status: 'replaying',
+    ...over,
+  });
+
+  it('refuses anything below the floors', () => {
+    expect(belowFloor({ ...active, approvalsNeeded: 3 })).not.toHaveLength(0);
+    expect(belowFloor({ ...active, minProviders: 1 })).not.toHaveLength(0);
+    expect(belowFloor(active)).toHaveLength(0);
+    const r = screen(
+      change({ ruleChange: { scopes: [{ scope: 'D', panelSize: 5, approvalsNeeded: 3 }] } }),
+      active,
+    );
+    expect(r.ok).toBe(false);
+  });
+
+  it('refuses any change that touches a fixed rule', () => {
+    expect(screen(change({ kind: 'defaults', touchesFixedRule: true }), active).ok).toBe(false);
+  });
+
+  it('needs at least 10 replayed missions and never more false wins', () => {
+    const r = {
+      heldUp: [14, 14] as [number, number],
+      falseWins: [1, 0] as [number, number],
+      costUsd: [200, 205] as [number, number],
+    };
+    expect(meetsRuleChangeRule(r, 10)).toBe(true);
+    expect(meetsRuleChangeRule(r, 9)).toBe(false);
+    expect(meetsRuleChangeRule({ ...r, falseWins: [0, 1] }, 12)).toBe(false);
+    expect(meetsRuleChangeRule({ ...r, heldUp: [14, 12] }, 12)).toBe(false);
+  });
+
+  it('replays never use the missions a change was learned from', () => {
+    expect(replayable(change({ learnedFrom: ['M-09'] }), ['M-08', 'M-09', 'M-10'])).toEqual([
+      'M-08',
+      'M-10',
+    ]);
+  });
+
+  it('ordinary changes need no loss and a 10% saving or more findings; probation rolls back', () => {
+    const c = change({
+      kind: 'model-choice',
+      replay: { heldUp: [9, 9], falseWins: [2, 2], costUsd: [212, 131] },
+    });
+    expect(adopt(c)).toBe(true);
+    expect(
+      adopt({ ...c, replay: { heldUp: [9, 9], falseWins: [2, 2], costUsd: [212, 205] } }),
+    ).toBe(false);
+    expect(followUp({ heldUp: 4, falseWins: 0 }, { heldUp: 4, falseWins: 1 })).toBe('roll back');
+    expect(followUp({ heldUp: 4, falseWins: 0 }, { heldUp: 5, falseWins: 0 })).toBe('keep');
+  });
+});
+
+describe('current best', () => {
+  const t1 = world.topics.find((t) => t.id === 'T-1')!;
+  const t3 = world.topics.find((t) => t.id === 'T-3')!;
+
+  it('replaces the best only with all four conditions, and keeps the old one', () => {
+    expect(canReplaceBest(idea('I-12-40'), t1, true).ok).toBe(true);
+    expect(canReplaceBest(idea('I-12-40'), t1, false).ok).toBe(false);
+    expect(canReplaceBest(idea('I-12-42'), t1, true).ok).toBe(false);
+    const next = replaceBest(t1, {
+      rule: 'ATR + time',
+      missionId: 'M-12',
+      ideaId: 'I-12-40',
+      gain: 2,
+      when: 'now',
+      date: '2026-11-27',
+    });
+    expect(currentBest(next).rule).toBe('ATR + time');
+    expect(next.history.find((h) => h.rule === 'Fixed 20-pip stop')?.status).toBe('retired');
+  });
+
+  it('restores the previous best when the current one is withdrawn', () => {
+    const t = replaceBest(t3, {
+      rule: 'New',
+      missionId: 'M-99',
+      ideaId: 'I',
+      gain: 1,
+      when: 'a',
+      date: '2026-11-20',
+    });
+    const r = restorePrevious(t, 'b', '2026-11-27', 'Withdrawn');
+    expect(currentBest(r).rule).toBe('No gap rule');
+    expect(r.history.some((h) => h.rule === 'New' && h.status === 'withdrawn')).toBe(true);
+  });
+
+  it('challenges old bests, skips topics with an open challenge, and waits for fresh data', () => {
+    const due = dueChallenges(world.topics, '2026-11-27');
+    const ids = due.map((d) => d.topicId);
+    expect(ids).not.toContain('T-1');
+    expect(ids).not.toContain('T-2');
+    expect(ids).toContain('T-4');
+    expect(due.find((d) => d.topicId === 'T-3')?.waitingForFresh).toBe(true);
+  });
+});
+
+describe('plan and receipts', () => {
+  it('runs about 30 ticks, with extra ticks for each option', () => {
+    expect(planMission()).toHaveLength(29);
+    expect(planMission({ panelRejects: true })).toHaveLength(33);
+    expect(planMission({ budgetLimit: true })).toHaveLength(30);
+    expect(planMission({ noWinner: true }).at(-3)?.k).toBe('close-no-winner');
+  });
+
+  it('every receipt has every field, in order', () => {
+    const r = buildReceipt({ idea: idea('I-12-40') });
+    expect(Object.keys(r)).toEqual([...RECEIPT_FIELDS]);
   });
 });
 
 describe('audit chain', () => {
-  it('links each entry to the one before', async () => {
+  it('verifies, breaks at the tampered entry and repairs', async () => {
     const chain = await buildChain(seedAudit);
-    expect(chain).toHaveLength(17);
     expect(chain[0].prevHash).toBe(GENESIS);
-    expect(chain[0].index).toBe(1);
-    for (let i = 1; i < chain.length; i++) expect(chain[i].prevHash).toBe(chain[i - 1].hash);
-    expect(chain[0].hash).toMatch(/^[0-9a-f]{64}$/);
-    expect(await verifyChain(chain)).toEqual({ ok: true, count: 17 });
-  });
-
-  it('appends without changing the chain', async () => {
-    const chain = await buildChain(seedAudit);
-    const next = await appendEntry(chain, { time: '14:30:00', who: 'You', action: 'Test' });
-    expect(next.index).toBe(18);
-    expect(next.prevHash).toBe(chain[16].hash);
-    expect(chain).toHaveLength(17);
-    expect(await verifyChain([...chain, next])).toEqual({ ok: true, count: 18 });
-  });
-
-  it('detects a quiet change at entry 8 and repairs it', async () => {
-    const chain = await buildChain(seedAudit);
-    const t = tamperEntry(chain, TAMPER_INDEX, TAMPER_FROM, TAMPER_TO);
-    expect(t).not.toBeNull();
-    expect(t!.chain[7].action).toContain('agree (99%)');
-    expect(t!.chain[7].hash).toBe(chain[7].hash); // fingerprint NOT recomputed
-    expect(await verifyChain(t!.chain)).toEqual({ ok: false, count: 17, brokenAt: 8 });
-    const fixed = repairEntry(t!.chain, t!.tamper);
-    expect(await verifyChain(fixed)).toEqual({ ok: true, count: 17 });
-  });
-
-  it('refuses to tamper when the text is not there', async () => {
-    const chain = await buildChain(seedAudit);
-    expect(tamperEntry(chain, 1, 'nope', 'x')).toBeNull();
-  });
-});
-
-describe('run receipt', () => {
-  it('has every field in order', () => {
-    const r = buildManifest({ jobId: 'J-1', role: 'Short-term analyst', member: seedMembers[0] });
-    expect(Object.keys(r)).toEqual([...MANIFEST_FIELDS]);
-    expect(r.Device).toBe('DESK-7F2A');
-    expect(r['AI provider and model']).toBe('Anthropic · Claude Sonnet 5.5');
-    expect(r['Signed with device key']).toMatch(/^ed25519:[0-9a-f]{24}$/);
-  });
-  it('shows waiting fields before a member is assigned', () => {
-    const r = buildManifest({ jobId: 'J-1', role: 'Editor' });
-    expect(r['Signed with device key']).toBe('Not signed yet');
-  });
-});
-
-describe('simulator tick plan', () => {
-  it('runs the normal 10 ticks and stops waiting for a person', () => {
-    const p = planTicks();
-    expect(p).toHaveLength(10);
-    expect(p.map((t) => t.kind)).toEqual([
-      'check',
-      'assign',
-      'research',
-      'spend',
-      'handIn',
-      'recheck',
-      'spend',
-      'agree',
-      'draft',
-      'human',
-    ]);
-    expect(p[7]).toEqual({ kind: 'agree', agreement: 93 });
-  });
-
-  it('shows a challenge, goes back to a new member, then agrees', () => {
-    const p = planTicks({ challenge: true });
-    const kinds = p.map((t) => t.kind);
-    const c = kinds.indexOf('challenge');
-    expect(p[c]).toEqual({ kind: 'challenge', agreement: 74 });
-    expect(p[c + 1]).toEqual({ kind: 'assign', pass: 2 });
-    expect(p.find((t) => t.kind === 'agree')).toEqual({ kind: 'agree', agreement: 95 });
-    expect(kinds[kinds.length - 1]).toBe('human');
-  });
-
-  it('simulates a dropped connection after tick 4', () => {
-    const p = planTicks({ dropped: true });
-    expect(p[4].kind).toBe('drop');
-    expect(p[5].kind).toBe('expire');
-    expect(p.at(-1)!.kind).toBe('human');
-  });
-
-  it('never spends more than the amount set aside', () => {
-    for (const opts of [{}, { challenge: true }, { dropped: true, challenge: true }]) {
-      for (const t of planTicks(opts)) {
-        if (t.kind === 'spend' || t.kind === 'handIn') expect(t.pct).toBeLessThanOrEqual(100);
-      }
-    }
-  });
-});
-
-describe('prices', () => {
-  it('is the same every load and centred on 1.0512', () => {
-    const a = makePrices();
-    const b = makePrices();
-    expect(a).toEqual(b);
-    expect(a).toHaveLength(96);
-    const mean = a.reduce((s, x) => s + x, 0) / a.length;
-    expect(mean).toBeCloseTo(1.0512, 3);
+    expect(await verifyChain(chain)).toEqual({ ok: true, count: seedAudit.length });
+    const t = tamperEntry(chain, TAMPER_INDEX, TAMPER_FROM, TAMPER_TO)!;
+    expect(t.tamper.changed).toBe('Verdict: I-12-14 promising');
+    expect(await verifyChain(t.chain)).toEqual({ ok: false, count: seedAudit.length, brokenAt: 8 });
+    expect((await verifyChain(repairEntry(t.chain, t.tamper))).ok).toBe(true);
   });
 });

@@ -1,0 +1,416 @@
+/* ---------- Shared chart text ---------- */
+
+.tick {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--ink-3);
+}
+
+.axisLabel {
+  font-family: var(--font-body);
+  font-size: 11.5px;
+  fill: var(--ink-3);
+}
+
+.grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.base {
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+
+.tip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 14px));
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 260px;
+  padding: 8px 11px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 12.5px;
+  line-height: 1.4;
+  pointer-events: none;
+  box-shadow: var(--shadow-pop);
+  z-index: 5;
+}
+
+.tip strong {
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+
+.tip span {
+  opacity: 0.85;
+}
+
+/* ---------- Idea field ---------- */
+
+.fieldWrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.field {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.strip {
+  fill: var(--surface-2);
+  stroke: var(--line);
+  stroke-dasharray: 3 3;
+}
+
+.bar {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+}
+
+.barLabel {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  fill: var(--accent);
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4px;
+}
+
+.dot {
+  cursor: pointer;
+  outline: none;
+  transition: transform 700ms var(--ease);
+}
+
+.mark {
+  stroke: var(--surface);
+  stroke-width: 2;
+  transition: fill 300ms var(--ease);
+}
+
+.ring {
+  fill: none;
+  stroke: var(--ink-2);
+  stroke-width: 1.5;
+}
+
+.dot:hover .mark,
+.dot:focus-visible .mark {
+  stroke: var(--ink);
+}
+
+.dot:focus-visible .ring,
+.dot:focus-visible circle:first-child {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.legendDiamond {
+  width: 9px !important;
+  height: 9px !important;
+  transform: rotate(45deg);
+  background: var(--ink-3);
+  border-radius: 1px !important;
+}
+
+.legendRing {
+  width: 12px !important;
+  height: 12px !important;
+  border-radius: 50% !important;
+  border: 1.5px solid var(--ink-2);
+  background: transparent !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot,
+  .mark {
+    transition: none;
+  }
+}
+
+/* ---------- Funnel ---------- */
+
+.funnel {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.funnel li {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+}
+
+.funnelCompact li {
+  grid-template-columns: minmax(120px, 170px) minmax(0, 1fr) 36px;
+  font-size: 12.5px;
+}
+
+.funnelLabel {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.funnelSub {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.funnelTrack {
+  height: 14px;
+  border-radius: 0 4px 4px 0;
+  background: var(--surface-3);
+}
+
+.funnelTrack span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 0 4px 4px 0;
+  transition: width 600ms var(--ease);
+}
+
+.funnelOut .funnelTrack span {
+  background: repeating-linear-gradient(135deg, var(--grey) 0 3px, transparent 3px 6px);
+}
+
+.funnelVal {
+  text-align: right;
+  font-weight: 600;
+}
+
+@media (max-width: 560px) {
+  .funnel li,
+  .funnelCompact li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 4px;
+  }
+  .funnelTrack {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* ---------- Family tree ---------- */
+
+.treeScroll {
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.tree {
+  position: relative;
+}
+
+.treeSvg {
+  position: absolute;
+  inset: 0;
+}
+
+.edge {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+
+.limit {
+  stroke: var(--bad-line);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 5;
+}
+
+.limitLabel {
+  position: absolute;
+  top: 26px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--bad);
+  white-space: nowrap;
+}
+
+.node {
+  position: absolute;
+  height: 48px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  border-left-width: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.node:hover,
+.node:focus-visible {
+  box-shadow: var(--shadow-pop);
+}
+
+.nodeTop {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  font-family: var(--font-mono);
+  color: var(--ink-3);
+}
+
+.nodeTitle {
+  font-size: 12.5px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tone_good {
+  border-left-color: var(--good);
+}
+
+.tone_warn {
+  border-left-color: var(--warn-dot);
+}
+
+.tone_bad {
+  border-left-color: var(--bad);
+}
+
+.tone_grey,
+.tone_dead {
+  border-left-color: var(--grey);
+}
+
+.tone_run {
+  border-left-color: var(--accent);
+}
+
+.tone_info {
+  border-left-color: var(--info);
+}
+
+/* ---------- Best steps ---------- */
+
+.bestWrap {
+  position: relative;
+}
+
+.best {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.step {
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.stepWithdrawn {
+  stroke: var(--bad);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+}
+
+.stepRiser {
+  stroke: var(--accent-line);
+  stroke-width: 1.5;
+}
+
+.stepDot {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+
+.stepDotNow {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.stepLabel {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  fill: var(--ink-2);
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4px;
+}
+
+/* ---------- Paired bars ---------- */
+
+.paired {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pairRow {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  font-size: 13.5px;
+}
+
+.pairBars {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.pairLine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  gap: 8px;
+  align-items: center;
+  font-size: 12.5px;
+}
+
+.pairTrack {
+  height: 11px;
+  background: var(--surface-3);
+  border-radius: 0 4px 4px 0;
+}
+
+.pairA,
+.pairB {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+}
+
+.pairA {
+  background: var(--accent);
+}
+
+.pairB {
+  background: var(--info);
+}
+
+@media (max-width: 560px) {
+  .pairRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}

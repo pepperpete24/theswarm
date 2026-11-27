@@ -3,16 +3,21 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import { Rail } from './components/Rail';
 import { DemoBanner, Toasts } from './components/Shell';
 import { Tour } from './components/Tour';
-import { Ask } from './screens/Ask';
+import { Approvals } from './screens/Approvals';
 import { Audit } from './screens/Audit';
-import { Board } from './screens/Board';
 import { Budgets } from './screens/Budgets';
 import { Contributors } from './screens/Contributors';
-import { JobPage } from './screens/JobPage';
+import { CouncilPage } from './screens/CouncilPage';
+import { IdeaPage } from './screens/IdeaPage';
+import { Improvement } from './screens/Improvement';
+import { Library } from './screens/Library';
+import { MissionPage } from './screens/MissionPage';
+import { Missions } from './screens/Missions';
+import { NewMission } from './screens/NewMission';
 import { NotFound } from './screens/NotFound';
 import { Overview } from './screens/Overview';
 import { Published } from './screens/Published';
-import { Review } from './screens/Review';
+import { Scoreboard } from './screens/Scoreboard';
 import { useSwarm } from './store/useSwarm';
 import s from './App.module.css';
 
@@ -47,13 +52,18 @@ export default function App() {
           <ScrollToTop />
           <Routes>
             <Route path="/" element={<Overview />} />
-            <Route path="/ask" element={<Ask />} />
-            <Route path="/board" element={<Board />} />
-            <Route path="/jobs/:id" element={<JobPage />} />
-            <Route path="/review" element={<Review />} />
+            <Route path="/new" element={<NewMission />} />
+            <Route path="/missions" element={<Missions />} />
+            <Route path="/missions/:id" element={<MissionPage />} />
+            <Route path="/ideas/:id" element={<IdeaPage />} />
+            <Route path="/council/:id" element={<CouncilPage />} />
+            <Route path="/approvals" element={<Approvals />} />
+            <Route path="/library" element={<Library />} />
+            <Route path="/improvement" element={<Improvement />} />
+            <Route path="/scoreboard" element={<Scoreboard />} />
             <Route path="/published" element={<Published />} />
-            <Route path="/budgets" element={<Budgets />} />
             <Route path="/contributors" element={<Contributors />} />
+            <Route path="/budgets" element={<Budgets />} />
             <Route path="/audit" element={<Audit />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

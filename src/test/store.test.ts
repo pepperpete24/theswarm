@@ -1,19 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EXAMPLE_FRESH, EXAMPLE_STUDIED, TICK_MS } from '../data/constants';
-import { flushAudit, resetSwarm, useSwarm, type AskInput } from '../store/useSwarm';
+import { EXAMPLE_FRESH, EXAMPLE_RUNNING, TICK_MS } from '../data/constants';
+import { lineageMembers } from '../domain/lineage';
+import { currentBest } from '../domain/improvement';
+import type { SimOptions } from '../domain/simulator';
+import { ambientStep, flushAudit, resetSwarm, useSwarm } from '../store/useSwarm';
 
-const ask = (over: Partial<AskInput> = {}) =>
-  useSwarm.getState().submitQuestion({
-    question: EXAMPLE_FRESH,
-    role: 'Market regime analyst',
-    maxCost: 1.5,
-    period: 'Last 2 years',
-    ...over,
-  });
-
-const job = (id: string) => useSwarm.getState().jobs.find((j) => j.id === id)!;
-const ticks = (n: number) => vi.advanceTimersByTimeAsync(TICK_MS * n);
-const settle = () => flushAudit();
+const launch = (options: SimOptions = {}, goal = EXAMPLE_FRESH) =>
+  useSwarm.getState().launch({ goal, budget: 40, swarmSize: 'whole', options });
+const world = () => useSwarm.getState().world;
+const mission = (id: string) => world().missions.find((m) => m.id === id)!;
+const ideasOf = (id: string) => mission(id).ideaIds.map((i) => world().ideas[i]);
+const run = () => vi.advanceTimersByTimeAsync(TICK_MS * 40);
 
 beforeEach(async () => {
   vi.useFakeTimers();
@@ -23,140 +20,153 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('asking a question', () => {
-  it('answers an already-studied question for free and creates no job', () => {
-    const before = useSwarm.getState().jobs.length;
-    const r = ask({ question: EXAMPLE_STUDIED });
-    expect(r.kind).toBe('studied');
-    if (r.kind === 'studied') expect(r.job.id).toBe('J-1039');
-    expect(useSwarm.getState().jobs.length).toBe(before);
+describe('launching', () => {
+  it('stops a copy of a running mission and spends nothing', () => {
+    const before = world().missions.length;
+    const r = launch({}, EXAMPLE_RUNNING);
+    expect(r.kind).toBe('running');
+    if (r.kind === 'running') expect(r.mission.id).toBe('M-12');
+    expect(world().missions.length).toBe(before);
   });
 
-  it('refuses a job above the free budget', () => {
-    const before = useSwarm.getState().jobs.length;
-    const r = ask({ maxCost: 50 });
+  it('refuses a budget above the free amount', () => {
+    const r = useSwarm.getState().launch({ goal: EXAMPLE_FRESH, budget: 900, swarmSize: 'whole' });
     expect(r.kind).toBe('refused');
-    expect(useSwarm.getState().jobs.length).toBe(before);
   });
+});
 
-  it('runs the Friday example to "waiting for a person" in 10 ticks (~23 s)', async () => {
-    const r = ask();
-    expect(r).toEqual({ kind: 'created', id: 'J-1048' });
-    expect(job('J-1048').state).toBe('queued');
-    await ticks(1);
-    expect(job('J-1048').step).toBe(1);
-    await ticks(1);
-    expect(job('J-1048').step).toBe(2);
-    expect(job('J-1048').agentId).toBeDefined();
-    expect(job('J-1048').agentId).not.toBe('dana');
-    await ticks(1);
-    expect(job('J-1048').state).toBe('researching');
-    expect(job('J-1048').heartbeat).toBe(true);
-    await ticks(2);
-    expect(job('J-1048').step).toBe(4);
-    expect(job('J-1048').finding).toMatch(/Fridays/);
-    await ticks(1);
-    expect(job('J-1048').state).toBe('rechecking');
-    expect(job('J-1048').reviewerId).toBe('dana');
-    await ticks(2);
-    expect(job('J-1048').agreement).toBe(93);
-    await ticks(1);
-    expect(job('J-1048').draft).toBeDefined();
-    await ticks(1);
-    const done = job('J-1048');
-    expect(done.state).toBe('human');
-    expect(done.step).toBe(8);
-    expect(done.charged).toBe(true);
-    expect(useSwarm.getState().toasts.at(-1)?.text).toMatch(/J-1048 agreed and is waiting for you/);
-    expect(done.manifest['Signed with device key']).toMatch(/^ed25519:/);
-    await settle();
-    const actions = useSwarm
-      .getState()
-      .audit.filter((e) => e.jobId === 'J-1048')
-      .map((e) => e.action);
-    expect(actions).toContain('Receipt valid, lease current');
-    expect(actions).toContain('Re-check result: agree (93%)');
-  });
-
-  it('shows a challenge, goes back to a new member, then agrees', async () => {
-    ask({ challenge: true });
-    await ticks(8);
-    const c = job('J-1048');
-    expect(c.state).toBe('challenged');
-    expect(c.agreement).toBe(74);
-    const firstAgent = c.agentId;
-    await ticks(1);
-    expect(job('J-1048').agentId).not.toBe(firstAgent);
-    await ticks(20);
-    expect(job('J-1048').state).toBe('human');
-    expect(job('J-1048').agreement).toBe(95);
-    await settle();
+describe('the full mission loop, with no clicks after launch', () => {
+  it('runs the take-profit example from brief to learned', async () => {
+    const r = launch();
+    expect(r).toEqual({ kind: 'created', id: 'M-14' });
+    await run();
+    await flushAudit();
+    const m = mission('M-14');
+    expect(m.phase).toBe('learned');
+    const ideas = ideasOf('M-14');
+    expect(new Set(ideas.map((i) => i.proposedBy)).size).toBeGreaterThanOrEqual(8);
+    expect(ideas.filter((i) => i.route === 'different-route').length).toBeGreaterThanOrEqual(3);
+    expect(ideas.filter((i) => i.state === 'merged')).toHaveLength(3);
+    expect(ideas.filter((i) => i.state === 'known-dead-end')).toHaveLength(1);
+    expect(ideas.filter((i) => i.state === 'failed-fresh')).toHaveLength(1);
+    expect(m.winnerIdeaIds.length).toBe(2);
+    const objections = ideas.flatMap((i) => i.objections);
+    expect(objections.some((o) => o.status === 'upheld')).toBe(true);
+    expect(objections.some((o) => o.status === 'answered')).toBe(true);
+    const council = world().councils['C-14-1'];
+    expect(council.syntheses.some((x) => x.kind === 'cheaper-route')).toBe(true);
+    // Approvers: nobody from the winners' lineage, their fresh checkers or the editor; 2+ providers.
+    const panel = world().panels[m.approvalId!];
+    expect(panel.outcome).toBe('published');
+    const banned = new Set<string>(['dana']);
+    for (const id of m.winnerIdeaIds) {
+      for (const x of lineageMembers(id, world().ideas)) banned.add(x);
+      banned.add(world().ideas[id].freshCheckedBy!);
+    }
+    for (const a of panel.approvers) expect(banned.has(a.memberId)).toBe(false);
+    expect(new Set(panel.approvers.map((a) => a.provider)).size).toBeGreaterThanOrEqual(2);
+    // Learning: library, current best, Challenger, Coach, self-start.
+    const t4 = world().topics.find((t) => t.id === 'T-4')!;
+    expect(currentBest(t4).missionId).toBe('M-14');
+    expect(t4.openChallengeMissionId).toBeDefined();
+    expect(mission(t4.openChallengeMissionId!).phase).toBe('queued');
+    expect(m.coachReview?.proposals).toHaveLength(1);
+    expect(world().missions.some((x) => x.createdBy === 'Swarm' && x.spawnedFromLibraryId)).toBe(
+      true,
+    );
+    expect(world().library.some((e) => e.fromMissionId === 'M-14' && e.kind === 'proven')).toBe(
+      true,
+    );
     const actions = useSwarm.getState().audit.map((e) => e.action);
-    expect(actions).toContain('Re-check result: challenge (74%)');
+    expect(actions.some((a) => /published automatically/.test(a))).toBe(true);
+    expect(actions.some((a) => /Challenger queued/.test(a))).toBe(true);
   });
 
-  it('simulates a dropped connection and reassigns', async () => {
-    ask({ dropped: true });
-    await ticks(4);
-    const first = job('J-1048');
-    const device = first.manifest.Device;
-    await ticks(1);
-    expect(job('J-1048').heartbeat).toBe(false);
-    await ticks(1);
-    expect(job('J-1048').agentId).not.toBe(first.agentId);
-    expect(job('J-1048').generation).toBe(2);
-    await settle();
-    expect(useSwarm.getState().audit.map((e) => e.action)).toContain(
-      `Lease expired on ${device}, late result refused`,
+  it('“Nothing beats the baseline” closes with no winner and adds dead ends', async () => {
+    launch({ noWinner: true });
+    await run();
+    expect(mission('M-14').phase).toBe('closed-no-winner');
+    expect(world().library.some((e) => e.fromMissionId === 'M-14' && e.kind === 'dead-end')).toBe(
+      true,
     );
-    await ticks(20);
-    expect(job('J-1048').state).toBe('human');
+  });
+
+  it('a dropped connection expires the lease and reassigns the test', async () => {
+    launch({ dropped: true });
+    await run();
+    await flushAudit();
+    expect(
+      useSwarm
+        .getState()
+        .audit.some((e) => /Lease expired on .*late result refused/.test(e.action)),
+    ).toBe(true);
+    expect(mission('M-14').phase).toBe('learned');
+  });
+
+  it('“Panel rejects” sends it back, then a second panel publishes', async () => {
+    launch({ panelRejects: true });
+    await run();
+    const m = mission('M-14');
+    expect(world().panels['A-14'].outcome).toBe('sent-back');
+    expect(world().panels['A-14b'].outcome).toBe('published');
+    expect(m.phase).toBe('learned');
+    expect(world().panels['A-14b'].approvers).toHaveLength(5);
+  });
+
+  it('hitting the budget limit cancels the queue and keeps going', async () => {
+    launch({ budgetLimit: true });
+    await run();
+    expect(ideasOf('M-14').filter((i) => i.state === 'cancelled').length).toBeGreaterThan(0);
+    expect(mission('M-14').spent).toBeLessThanOrEqual(mission('M-14').reserved);
+    expect(mission('M-14').phase).toBe('learned');
   });
 });
 
-describe('deciding', () => {
-  it('approving publishes with all four facts filled', async () => {
-    useSwarm.getState().approve('J-1043', 'checked the costs');
-    const j = job('J-1043');
-    expect(j.state).toBe('published');
-    expect(j.step).toBe(9);
-    expect(j.observedAt).toBeTruthy();
-    expect(j.publishedAt).toBeTruthy();
-    expect(j.expiresAt).toBeTruthy();
-    expect(j.provenWrongIf).toBeTruthy();
-    await settle();
-    expect(useSwarm.getState().audit.at(-1)?.action).toMatch(
-      /Approved and published.*checked the costs/,
+describe('owner controls', () => {
+  it('the emergency stop halts work until it is released', async () => {
+    launch();
+    await vi.advanceTimersByTimeAsync(TICK_MS * 3);
+    useSwarm.getState().emergencyStop();
+    const phase = mission('M-14').phase;
+    const at = ideasOf('M-14').length;
+    await run();
+    expect(mission('M-14').phase).toBe(phase);
+    expect(ideasOf('M-14').length).toBe(at);
+    expect(launch({}, 'Can we avoid breakout trades in the hour before US jobs data?').kind).toBe(
+      'refused',
     );
-    expect(useSwarm.getState().toasts.at(-1)?.link?.label).toBe('See what viewers see');
+    useSwarm.getState().releaseStop();
+    await run();
+    expect(mission('M-14').phase).toBe('learned');
   });
 
-  it('rejecting moves the job to Done', () => {
-    useSwarm.getState().reject('J-1042');
-    expect(job('J-1042').state).toBe('rejected');
-  });
-});
-
-describe('contributors', () => {
-  it('a paused member gets no new jobs', async () => {
-    for (const id of ['aroha', 'bjorn', 'chen', 'emeka']) useSwarm.getState().togglePause(id);
-    ask();
-    await ticks(2);
-    expect(job('J-1048').agentId).toBe('gustavo');
-    await settle();
-    expect(useSwarm.getState().audit.map((e) => e.action)).toContain('Paused member Aroha K.');
+  it('a paused member gets no seats or work', async () => {
+    useSwarm.getState().togglePause('lars');
+    launch();
+    await run();
+    const ideas = ideasOf('M-14');
+    expect(ideas.every((i) => i.proposedBy !== 'lars')).toBe(true);
+    const panel = world().panels[mission('M-14').approvalId!];
+    expect(panel.approvers.map((a) => a.memberId)).not.toContain('lars');
+    for (const c of mission('M-14').councilIds)
+      expect(world().councils[c].panel.map((p) => p.memberId)).not.toContain('lars');
   });
 });
 
-describe('audit chain demo', () => {
-  it('breaks at entry 8 after a quiet change and is intact after undo', async () => {
-    const st = useSwarm.getState();
-    expect((await st.checkChain()).ok).toBe(true);
-    st.tamperOld();
-    const broken = await useSwarm.getState().checkChain();
-    expect(broken).toEqual({ ok: false, count: 17, brokenAt: 8 });
-    await useSwarm.getState().undoTamper();
-    expect(useSwarm.getState().chainCheck).toEqual({ ok: true, count: 17 });
-    expect(useSwarm.getState().tamper).toBeNull();
+describe('ambient swarm and cooling-off', () => {
+  it('the rule-change panel adopts v3, which only applies to missions started afterwards', async () => {
+    const before = launch();
+    expect(before.kind).toBe('created');
+    for (let i = 0; i < 40; i++) ambientStep();
+    const rules = world().rules;
+    expect(rules.find((r) => r.version === 3)?.status).toBe('active');
+    expect(rules.find((r) => r.version === 2)?.status).toBe('retired');
+    expect(world().panels['P-07'].outcome).toBe('adopted');
+    expect(world().roleVersions.find((r) => r.role === 'Red team' && r.version === 4)?.status).toBe(
+      'active',
+    );
+    await run();
+    expect(mission('M-14').approvalRuleVersion).toBe(2);
+    expect(mission('M-11').phase === 'learned' || mission('M-11').phase === 'published').toBe(true);
   });
 });

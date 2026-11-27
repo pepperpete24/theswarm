@@ -1,8 +1,9 @@
 /*
  * Swarm Research Desk design tokens.
  * Calm lab-notebook console: cool greys with a slight green tint, one teal accent.
- * Status colours: green = agreed/published, amber = waiting for a person,
- * red = challenged/rejected/withdrawn, grey = expired/paused, teal = running.
+ * Status colours: green = promising/held up/published, amber = needs evidence/in approval,
+ * red = rejected/didn't hold up/withdrawn, grey = proposed/queued/paused, teal = running,
+ * blue-grey = tested, dotted grey outline = known dead end.
  */
 :root {
   --font-display: 'Bricolage Grotesque', 'Segoe UI', system-ui, sans-serif;
@@ -53,6 +54,9 @@
   --grey: #66736f;
   --grey-soft: #eceff0;
   --grey-line: #d3d9d8;
+  --info: #3d5674;
+  --info-soft: #e5ebf2;
+  --info-line: #b7c6d8;
 
   --shadow-pop: 0 12px 32px -12px rgba(16, 40, 36, 0.28), 0 2px 6px rgba(16, 40, 36, 0.08);
   --focus: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent);
@@ -91,6 +95,9 @@
     --grey: #8d9a96;
     --grey-soft: #1b2422;
     --grey-line: #2f3b38;
+    --info: #9db4d0;
+    --info-soft: #17202b;
+    --info-line: #33465c;
 
     --shadow-pop: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.4);
 
@@ -128,6 +135,9 @@
   --grey: #8d9a96;
   --grey-soft: #1b2422;
   --grey-line: #2f3b38;
+  --info: #9db4d0;
+  --info-soft: #17202b;
+  --info-line: #33465c;
 
   --shadow-pop: 0 16px 40px -12px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.4);
 

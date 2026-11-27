@@ -885,3 +885,522 @@ a.tile:hover {
     left: calc(var(--s-4) + 18px);
   }
 }
+
+/* =================== v2: council swarm =================== */
+
+.headSide {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex: none;
+}
+
+.beat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.beat svg {
+  color: var(--accent);
+}
+
+.speed {
+  display: flex;
+  gap: 4px;
+}
+
+.speed :global(.chip) {
+  min-height: 28px;
+  padding: 2px 10px;
+  font-family: var(--font-mono);
+}
+
+.activity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+}
+
+.crew {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.fieldGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
+  gap: var(--s-4);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .fieldGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tabBody {
+  padding-top: var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.session:last-child {
+  border-bottom: 0;
+}
+
+.objGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.synths {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.synths li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 13.5px;
+}
+
+.hits li,
+.libHit {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13.5px;
+}
+
+.ideaCell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  color: var(--ink);
+  text-decoration: none;
+  min-width: 220px;
+}
+
+.ideaCell:hover span:nth-child(2) {
+  color: var(--accent);
+}
+
+.ideaCell :global(.num) {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.routeTag,
+.standingTag {
+  align-self: flex-start;
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--info-soft);
+  color: var(--info);
+  border: 1px solid var(--info-line);
+}
+
+.sortBtn {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.segBtn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.segBtn span {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+}
+
+.segBtn[aria-checked='true'] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.advanced summary {
+  cursor: pointer;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.gates {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
+}
+
+.gates li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.gateIcon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+
+.gatePass .gateIcon {
+  background: var(--good-soft);
+  color: var(--good);
+  border: 1px solid var(--good-line);
+}
+
+.gateFail .gateIcon {
+  background: var(--bad-soft);
+  color: var(--bad);
+  border: 1px solid var(--bad-line);
+}
+
+.lineLink {
+  display: block;
+}
+
+/* ---------- Approvals ---------- */
+
+.voteSeats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.voteSeats li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+}
+
+.voteTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.voteSeats .voteYes {
+  border-left-color: var(--good);
+}
+
+.voteSeats .voteNo {
+  border-left-color: var(--bad);
+}
+
+.voteSeats .votePending {
+  border-left-color: var(--grey);
+  border-style: dashed;
+}
+
+.tally {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bad {
+  color: var(--bad);
+}
+
+.checks {
+  list-style: none;
+  margin: 10px 0 14px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.checks li {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.checks svg {
+  color: var(--good);
+}
+
+.winner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+}
+
+.govCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: var(--s-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.govCard:last-child {
+  border-bottom: 0;
+}
+
+/* ---------- Library, improvement ---------- */
+
+.counters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.counter {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.counter b {
+  font-family: var(--font-display);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.counter span {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.libGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--s-4);
+}
+
+.libCard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.libTop {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.libFoot {
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: auto;
+}
+
+.roleBox h3 {
+  margin-bottom: 8px;
+}
+
+.versions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.versions li {
+  display: grid;
+  grid-template-columns: 30px auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.historyLine {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.floors {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--line-strong);
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.floors strong {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.floors ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+
+.cellSub {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 2px;
+  max-width: 420px;
+}
+
+/* ---------- Missions ---------- */
+
+.missionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--s-4);
+}
+
+.missionCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--ink);
+  text-decoration: none;
+  transition:
+    border-color 140ms var(--ease),
+    box-shadow 140ms var(--ease);
+}
+
+.missionCard:hover {
+  border-color: var(--accent-line);
+  box-shadow: var(--shadow-pop);
+}
+
+.mini {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.mini span {
+  display: flex;
+  flex-direction: column;
+}
+
+.mini b {
+  font-size: 17px;
+  color: var(--ink);
+}
+
+.autonomy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
+  font-size: 14px;
+}
+
+.autonomy svg {
+  color: var(--accent);
+  flex: none;
+}
+
+@media (max-width: 760px) {
+  .jobHead {
+    flex-direction: column;
+  }
+  .headSide {
+    align-items: flex-start;
+  }
+}

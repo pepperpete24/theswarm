@@ -1,10 +1,8 @@
 import { create } from 'zustand';
-import { answerFor, type CannedAnswer } from '../data/answers';
 import { TAMPER_FROM, TAMPER_INDEX, TAMPER_TO, seedAudit } from '../data/audit';
-import { EDITOR_NAME, RECHECKER_ID, TICK_MS } from '../data/constants';
-import { FIRST_NEW_JOB_NUMBER, seedJobs } from '../data/jobs';
-import { seedMembers } from '../data/members';
-import { admit, eligibleMembers, money } from '../domain/budget';
+import { AMBIENT_MS, TICK_MS } from '../data/constants';
+import { ambientVotes } from '../data/knowledge';
+import { seedWorld, type Run } from '../data/seed';
 import {
   appendEntry,
   buildChain,
@@ -14,11 +12,19 @@ import {
   type ChainCheck,
   type Tamper,
 } from '../domain/auditChain';
+import { admitMission } from '../domain/budget';
 import { demoSeconds, demoTime, fmtClock } from '../domain/clock';
-import { findStudied } from '../domain/dedupe';
-import { buildManifest } from '../domain/manifest';
-import { planTicks, type PlanOptions, type Tick } from '../domain/simulator';
-import type { AuditDraft, AuditEntry, Job, Member } from '../domain/types';
+import { checkLibrary } from '../domain/library';
+import type { AuditDraft, AuditEntry, Mission, MissionRules } from '../domain/types';
+import {
+  applyPanelVote,
+  applyTick,
+  createMission,
+  type Clock,
+  type Fx,
+  type World,
+} from '../domain/world';
+import type { SimOptions } from '../domain/simulator';
 
 export interface Toast {
   id: number;
@@ -29,38 +35,37 @@ export interface Toast {
 
 export type Theme = 'light' | 'dark' | null;
 
-export interface AskInput {
-  question: string;
-  role: string;
-  maxCost: number;
-  period: string;
-  challenge?: boolean;
-  dropped?: boolean;
+export interface LaunchInput {
+  goal: string;
+  budget: number;
+  swarmSize: MissionRules['swarmSize'];
+  rules?: Partial<MissionRules>;
+  options?: SimOptions;
 }
 
-export type AskResult =
-  | { kind: 'studied'; job: Job }
+export type LaunchResult =
+  | { kind: 'running'; mission: Mission }
   | { kind: 'refused'; reason: string; fix: string }
   | { kind: 'created'; id: string };
 
 interface SwarmState {
-  members: Member[];
-  jobs: Job[];
+  world: World;
   audit: AuditEntry[];
   auditReady: boolean;
   tamper: Tamper | null;
   chainCheck: ChainCheck | null;
   toasts: Toast[];
   theme: Theme;
-  /** 1 = normal speed. The tour can run the simulation faster. */
   speed: number;
   tourStep: number | null;
-  nextJobNumber: number;
+  stopped: boolean;
+  /** Missions this session is running on the timer (for the "live" badge). */
+  live: string[];
 
-  submitQuestion: (input: AskInput) => AskResult;
-  approve: (id: string, note?: string) => void;
-  reject: (id: string, note?: string) => void;
+  launch: (input: LaunchInput) => LaunchResult;
   togglePause: (memberId: string) => void;
+  emergencyStop: () => void;
+  releaseStop: () => void;
   checkChain: () => Promise<ChainCheck>;
   tamperOld: () => void;
   undoTamper: () => Promise<void>;
@@ -72,32 +77,33 @@ interface SwarmState {
 }
 
 // ---------------------------------------------------------------------------
-// Audit writes are async (real SHA-256), so they run one after another in a queue.
 let auditQueue: Promise<void> = Promise.resolve();
 let toastId = 1;
 
-interface SimRun {
-  plan: Tick[];
-  at: number;
+interface LiveRun extends Run {
   timer?: ReturnType<typeof setTimeout>;
-  answer: CannedAnswer;
-  pastAgents: string[];
 }
-const runs = new Map<string, SimRun>();
+/** Missions started in this session; they tick every TICK_MS / speed. */
+const userRuns = new Map<string, LiveRun>();
+/** Seeded missions the rest of the swarm carries on with, slowly. */
+let ambientRuns: Record<string, Run> = {};
+let ambientVoteAt = 0;
+let ambientTurn = 0;
+let ambientTimer: ReturnType<typeof setTimeout> | undefined;
+let ambientEnabled = false;
 
-const name = (members: Member[], id?: string) => members.find((m) => m.id === id)?.name ?? '—';
-const aiOf = (members: Member[], id?: string) => `${name(members, id)}’s AI`;
-const round2 = (n: number) => Math.round(n * 100) / 100;
-const dayStamp = (extraDays = 0) => {
-  const day = 26 + extraDays;
-  const label = day > 30 ? `${day - 30} Dec` : `${day} Nov`;
-  return `${label}, ${fmtClock(demoSeconds(), false)}`;
-};
+export function clockNow(): Clock {
+  const t = demoSeconds();
+  return { time: demoTime(), stamp: `27 Nov, ${fmtClock(t, false)}`, date: '2026-11-27' };
+}
 
 function freshState() {
+  const { world, runs } = seedWorld();
+  ambientRuns = runs;
+  ambientVoteAt = 0;
+  ambientTurn = 0;
   return {
-    members: seedMembers.map((m) => ({ ...m, roles: [...m.roles] })),
-    jobs: seedJobs(),
+    world,
     audit: [] as AuditEntry[],
     auditReady: false,
     tamper: null as Tamper | null,
@@ -106,356 +112,121 @@ function freshState() {
     theme: null as Theme,
     speed: 1,
     tourStep: null as number | null,
-    nextJobNumber: FIRST_NEW_JOB_NUMBER,
+    stopped: false,
+    live: [] as string[],
   };
 }
 
 export const useSwarm = create<SwarmState>()((set, get) => {
-  const writeAudit = (...drafts: Omit<AuditDraft, 'time'>[]) => {
+  const writeAudit = (drafts: Omit<AuditDraft, 'time'>[]) => {
+    if (!drafts.length) return auditQueue;
     const time = demoTime();
     auditQueue = auditQueue.then(async () => {
       for (const d of drafts) {
         const entry = await appendEntry(get().audit, { time, ...d });
         set({ audit: [...get().audit, entry] });
       }
-      // Keep a shown check result honest as new entries arrive.
       if (get().chainCheck) set({ chainCheck: await verifyChain(get().audit) });
     });
     return auditQueue;
   };
 
-  const patchJob = (id: string, fn: (j: Job) => Partial<Job>) =>
-    set({ jobs: get().jobs.map((j) => (j.id === id ? { ...j, ...fn(j) } : j)) });
-
-  const addHistory = (id: string, text: string, who: string) =>
-    patchJob(id, (j) => ({ history: [...j.history, { time: demoTime(), text, who }] }));
-
-  const pickMember = (job: Job, exclude: string[]): Member | undefined => {
-    const pool = eligibleMembers(get().members, 0, [RECHECKER_ID, ...exclude]);
-    const withRoom = pool.filter((m) => m.spentToday + job.reserved <= m.dailyCap);
-    const list = withRoom.length ? withRoom : pool;
-    return list[Math.floor(Math.random() * list.length)];
+  const applyFx = (fx: Fx) => {
+    writeAudit(fx.audit);
+    for (const t of fx.toasts) get().pushToast(t);
   };
 
-  const assignTo = (job: Job, member: Member, run: SimRun) => {
-    run.pastAgents.push(member.id);
-    patchJob(job.id, (j) => ({
-      agentId: member.id,
-      generation: (j.generation ?? 0) + 1,
-      manifest: buildManifest({
-        jobId: j.id,
-        role: j.role,
-        member,
-        started: demoTime(),
-      }),
-    }));
+  const step = (id: string, run: Run) => {
+    const tick = run.plan[run.at];
+    if (!tick) return false;
+    run.at += 1;
+    const r = applyTick(get().world, id, run.script, tick, clockNow());
+    set({ world: r.world });
+    applyFx(r.fx);
+    return run.at < run.plan.length;
   };
 
-  const applyTick = (jobId: string, tick: Tick, run: SimRun) => {
-    const job = get().jobs.find((j) => j.id === jobId);
-    if (!job) return;
-    const { members } = get();
-    switch (tick.kind) {
-      case 'check':
-        patchJob(jobId, () => ({ step: 1 }));
-        addHistory(jobId, 'Checked: not studied before, within budget', 'Platform');
-        writeAudit({
-          who: 'Platform',
-          action: 'Checked: not studied before, within budget',
-          jobId,
-        });
-        break;
-      case 'assign': {
-        const m = pickMember(job, run.pastAgents);
-        if (!m) {
-          addHistory(jobId, 'No member is free right now. Waiting for one.', 'Platform');
-          stopRun(jobId);
-          return;
-        }
-        assignTo(job, m, run);
-        if (tick.pass === 1) {
-          patchJob(jobId, () => ({ step: 2 }));
-          addHistory(
-            jobId,
-            `${money(job.reserved)} set aside, assigned to ${m.name}’s AI`,
-            'Platform',
-          );
-          writeAudit({
-            who: 'Platform',
-            action: `${money(job.reserved)} set aside, 60 s lease to ${m.device}`,
-            jobId,
-          });
-        } else {
-          patchJob(jobId, () => ({
-            step: 2,
-            agreement: undefined,
-            recheck: undefined,
-            recheckTable: undefined,
-          }));
-          addHistory(jobId, `Sent back for another try, assigned to ${m.name}’s AI`, 'Platform');
-          writeAudit({
-            who: 'Platform',
-            action: `Sent back for another try, 60 s lease to ${m.device}`,
-            jobId,
-          });
-        }
-        break;
-      }
-      case 'research':
-        patchJob(jobId, () => ({ step: 3, state: 'researching', heartbeat: true }));
-        addHistory(jobId, 'Researching, checking in every 15 s', aiOf(members, job.agentId));
-        break;
-      case 'spend':
-        patchJob(jobId, (j) => ({ spent: round2((j.reserved * tick.pct) / 100) }));
-        break;
-      case 'handIn': {
-        const member = members.find((m) => m.id === job.agentId);
-        const spent = round2((job.reserved * tick.pct) / 100);
-        patchJob(jobId, (j) => ({
-          step: 4,
-          spent,
-          heartbeat: false,
-          finding: run.answer.finding,
-          resultTable: run.answer.resultTable,
-          observedAt: dayStamp(),
-          provenWrongIf: run.answer.provenWrongIf,
-          manifest: buildManifest({
-            jobId,
-            role: j.role,
-            member,
-            started: j.manifest.Started,
-            finished: demoTime(),
-            tokens: Math.round(spent * 52000 + 3100),
-            cost: spent,
-            toolCalls: Math.round(spent * 28 + 4),
-          }),
-        }));
-        addHistory(jobId, 'Handed in with signed run receipt', aiOf(members, job.agentId));
-        writeAudit(
-          {
-            who: aiOf(members, job.agentId),
-            action: 'Handed in finding with signed run receipt',
-            jobId,
-          },
-          { who: 'Platform', action: 'Receipt valid, lease current', jobId },
-        );
-        break;
-      }
-      case 'recheck':
-        patchJob(jobId, () => ({ step: 5, state: 'rechecking', reviewerId: RECHECKER_ID }));
-        addHistory(jobId, `Re-check started by ${aiOf(members, RECHECKER_ID)}`, 'Platform');
-        writeAudit({
-          who: 'Platform',
-          action: `Re-check task given to ${aiOf(members, RECHECKER_ID)}`,
-          jobId,
-        });
-        break;
-      case 'agree':
-        patchJob(jobId, () => ({
-          step: 6,
-          agreement: tick.agreement,
-          recheck: run.answer.recheck,
-          recheckTable: run.answer.recheckTable,
-        }));
-        addHistory(jobId, `Agreed: answers ${tick.agreement}% alike`, aiOf(members, RECHECKER_ID));
-        writeAudit({
-          who: aiOf(members, RECHECKER_ID),
-          action: `Re-check result: agree (${tick.agreement}%)`,
-          jobId,
-        });
-        break;
-      case 'challenge':
-        patchJob(jobId, () => ({
-          step: 2,
-          state: 'challenged',
-          agreement: tick.agreement,
-          recheck: run.answer.challengeRecheck,
-          recheckTable: undefined,
-        }));
-        addHistory(
-          jobId,
-          `Challenged: answers only ${tick.agreement}% alike. Going back for another try`,
-          aiOf(members, RECHECKER_ID),
-        );
-        writeAudit({
-          who: aiOf(members, RECHECKER_ID),
-          action: `Re-check result: challenge (${tick.agreement}%)`,
-          jobId,
-        });
-        break;
-      case 'drop':
-        patchJob(jobId, () => ({ heartbeat: false }));
-        addHistory(jobId, `Stopped checking in. ${job.manifest.Device} has gone quiet`, 'Platform');
-        break;
-      case 'expire': {
-        const old = members.find((m) => m.id === job.agentId);
-        const device = old?.device ?? 'device';
-        addHistory(jobId, `Lease expired on ${device}, late result refused`, 'Platform');
-        const m = pickMember(job, run.pastAgents);
-        if (!m) {
-          writeAudit({
-            who: 'Platform',
-            action: `Lease expired on ${device}, late result refused`,
-            jobId,
-          });
-          patchJob(jobId, () => ({ state: 'queued', step: 2 }));
-          stopRun(jobId);
-          return;
-        }
-        assignTo(job, m, run);
-        patchJob(jobId, () => ({ step: 2 }));
-        addHistory(jobId, `Reassigned to ${m.name}’s AI`, 'Platform');
-        writeAudit(
-          { who: 'Platform', action: `Lease expired on ${device}, late result refused`, jobId },
-          { who: 'Platform', action: `Reassigned, 60 s lease to ${m.device}`, jobId },
-        );
-        break;
-      }
-      case 'draft':
-        patchJob(jobId, () => ({ step: 7, draft: run.answer.draft }));
-        addHistory(jobId, 'Draft written by editor AI', EDITOR_NAME);
-        writeAudit({ who: EDITOR_NAME, action: 'Draft written, waiting for a person', jobId });
-        break;
-      case 'human': {
-        const fresh = get().jobs.find((j) => j.id === jobId)!;
-        const agentShare = round2(fresh.spent * 0.7);
-        const reviewShare = round2(fresh.spent - agentShare);
-        set({
-          members: get().members.map((m) =>
-            m.id === fresh.agentId
-              ? { ...m, spentToday: round2(m.spentToday + agentShare) }
-              : m.id === fresh.reviewerId
-                ? { ...m, spentToday: round2(m.spentToday + reviewShare) }
-                : m,
-          ),
-        });
-        patchJob(jobId, () => ({ step: 8, state: 'human', charged: true, heartbeat: false }));
-        addHistory(jobId, 'Waiting for a person', 'Platform');
-        get().pushToast({
-          text: `${jobId} agreed and is waiting for you.`,
-          link: { to: '/review', label: 'Open the review desk' },
-          tone: 'warn',
-        });
-        break;
-      }
-    }
-  };
-
-  const stopRun = (jobId: string) => {
-    const r = runs.get(jobId);
-    if (r?.timer) clearTimeout(r.timer);
-    runs.delete(jobId);
-  };
-
-  const scheduleNext = (jobId: string) => {
-    const run = runs.get(jobId);
-    if (!run) return;
+  const scheduleUser = (id: string) => {
+    const run = userRuns.get(id);
+    if (!run || get().stopped) return;
     run.timer = setTimeout(() => {
-      const tick = run.plan[run.at];
-      run.at += 1;
-      applyTick(jobId, tick, run);
-      if (run.at < run.plan.length && runs.has(jobId)) scheduleNext(jobId);
-      else runs.delete(jobId);
+      const more = step(id, run);
+      if (more) scheduleUser(id);
+      else {
+        userRuns.delete(id);
+        set({ live: get().live.filter((x) => x !== id) });
+      }
     }, TICK_MS / get().speed);
   };
 
-  const startSimulation = (jobId: string, answer: CannedAnswer, opts: PlanOptions) => {
-    runs.set(jobId, { plan: planTicks(opts), at: 0, answer, pastAgents: [] });
-    scheduleNext(jobId);
+  const stopTimers = () => {
+    for (const r of userRuns.values()) if (r.timer) clearTimeout(r.timer);
+    if (ambientTimer) clearTimeout(ambientTimer);
   };
 
   return {
     ...freshState(),
 
-    submitQuestion: (input) => {
-      const question = input.question.trim();
-      const { jobs, members } = get();
-      const studied = findStudied(question, jobs);
-      if (studied) return { kind: 'studied', job: studied };
-      const a = admit(input.maxCost, jobs, members);
+    launch: (input) => {
+      const goal = input.goal.trim();
+      const { world } = get();
+      const lib = checkLibrary(goal, world.library, world.missions, world.topics);
+      if (lib.running) return { kind: 'running', mission: lib.running };
+      const a = admitMission(input.budget, world.missions, world.members);
       if (!a.ok) return { kind: 'refused', reason: a.reason, fix: a.fix };
-
-      const id = `J-${get().nextJobNumber}`;
-      const job: Job = {
-        id,
-        question,
-        role: input.role,
-        state: 'queued',
-        step: 0,
-        reserved: round2(input.maxCost),
-        spent: 0,
-        period: input.period,
-        isUserCreated: true,
-        askedBy: 'You',
-        history: [{ time: demoTime(), text: 'Asked', who: 'You' }],
-        manifest: buildManifest({ jobId: id, role: input.role }),
-      };
-      set({ jobs: [job, ...jobs], nextJobNumber: get().nextJobNumber + 1 });
-      writeAudit({ who: 'You', action: `Asked: “${question}”`, jobId: id });
-      startSimulation(id, answerFor(question, input.role, input.period), {
-        challenge: input.challenge,
-        dropped: input.dropped,
-      });
-      return { kind: 'created', id };
+      if (get().stopped)
+        return {
+          kind: 'refused',
+          reason: 'The emergency stop is on, so no new work can start.',
+          fix: 'Release the emergency stop at the bottom of the side bar.',
+        };
+      const c = createMission(world, { ...input, goal }, clockNow());
+      set({ world: c.world, live: [...get().live, c.mission.id] });
+      applyFx(c.fx);
+      userRuns.set(c.mission.id, { script: c.script, plan: c.plan, at: 0 });
+      scheduleUser(c.mission.id);
+      return { kind: 'created', id: c.mission.id };
     },
 
-    approve: (id, note) => {
-      const job = get().jobs.find((j) => j.id === id);
-      if (!job || job.state !== 'human') return;
-      patchJob(id, (j) => ({
-        state: 'published',
-        step: 9,
-        publishedAt: dayStamp(),
-        expiresAt: dayStamp(7),
-        observedAt: j.observedAt ?? dayStamp(),
-        provenWrongIf:
-          j.provenWrongIf ?? 'A fresh run on next month’s data gives a different answer.',
-      }));
-      addHistory(
-        id,
-        note ? `Approved and published. Note: ${note}` : 'Approved and published',
-        'You',
-      );
-      writeAudit({
-        who: 'You',
-        action: note ? `Approved and published. Note: “${note}”` : 'Approved and published',
-        jobId: id,
+    togglePause: (memberId) => {
+      const w = get().world;
+      const m = w.members.find((x) => x.id === memberId);
+      if (!m) return;
+      const online = !m.online;
+      set({
+        world: { ...w, members: w.members.map((x) => (x.id === memberId ? { ...x, online } : x)) },
       });
+      writeAudit([{ who: 'You', action: `${online ? 'Resumed' : 'Paused'} member ${m.name}` }]);
       get().pushToast({
-        text: `${id} is now published.`,
-        link: { to: '/published', label: 'See what viewers see' },
-        tone: 'good',
+        text: online
+          ? `${m.name} is back. Their agent can take seats and new work again.`
+          : `${m.name} is paused. Their agent gets no new seats or work until resumed.`,
+        tone: online ? 'good' : 'info',
       });
     },
 
-    reject: (id, note) => {
-      const job = get().jobs.find((j) => j.id === id);
-      if (!job || job.state !== 'human') return;
-      patchJob(id, () => ({ state: 'rejected' }));
-      addHistory(id, note ? `Rejected. Note: ${note}` : 'Rejected', 'You');
-      writeAudit({
-        who: 'You',
-        action: note ? `Rejected. Note: “${note}”` : 'Rejected',
-        jobId: id,
-      });
+    emergencyStop: () => {
+      if (get().stopped) return;
+      stopTimers();
+      set({ stopped: true });
+      writeAudit([
+        { who: 'You (owner)', action: 'Emergency stop: all new work and publishing halted' },
+      ]);
       get().pushToast({
-        text: `${id} was rejected. It stays on the board under Done, and nothing was published.`,
-        link: { to: `/jobs/${id}`, label: 'See the job' },
+        text: 'Emergency stop is on. No new work starts and nothing is published until you release it.',
         tone: 'bad',
       });
     },
 
-    togglePause: (memberId) => {
-      const m = get().members.find((x) => x.id === memberId);
-      if (!m) return;
-      const online = !m.online;
-      set({ members: get().members.map((x) => (x.id === memberId ? { ...x, online } : x)) });
-      writeAudit({ who: 'You', action: `${online ? 'Resumed' : 'Paused'} member ${m.name}` });
+    releaseStop: () => {
+      if (!get().stopped) return;
+      set({ stopped: false });
+      writeAudit([{ who: 'You (owner)', action: 'Emergency stop released; work resumes' }]);
+      for (const id of userRuns.keys()) scheduleUser(id);
+      if (ambientEnabled) scheduleAmbientLoop();
       get().pushToast({
-        text: online
-          ? `${m.name} is back. Their AI can be given new jobs again.`
-          : `${m.name} is paused. Their AI gets no new jobs until you resume it.`,
-        tone: online ? 'good' : 'info',
+        text: 'Emergency stop released. The swarm carries on where it left off.',
+        tone: 'good',
       });
     },
 
@@ -471,7 +242,7 @@ export const useSwarm = create<SwarmState>()((set, get) => {
       if (!t) return;
       set({ audit: t.chain, tamper: t.tamper, chainCheck: null });
       get().pushToast({
-        text: `Entry ${TAMPER_INDEX} now says “${TAMPER_TO}” instead of “${TAMPER_FROM}”. Its fingerprint was not updated, the way a quiet edit would go. Now press Check the chain.`,
+        text: `Entry ${TAMPER_INDEX} now says “${t.tamper.changed}”. Its fingerprint was not updated, the way a quiet edit would go. Now press Check the chain.`,
         tone: 'warn',
       });
     },
@@ -500,25 +271,87 @@ export function initAudit() {
   return auditQueue;
 }
 
+/** Start the rest of the swarm carrying on by itself (not in tests). */
+export function startAmbient() {
+  if (ambientEnabled) return;
+  ambientEnabled = true;
+  scheduleAmbientLoop();
+}
+
+function scheduleAmbientLoop() {
+  if (ambientTimer) clearTimeout(ambientTimer);
+  if (!ambientEnabled || useSwarm.getState().stopped) return;
+  ambientTimer = setTimeout(
+    () => {
+      if (!ambientEnabled || useSwarm.getState().stopped) return;
+      ambientStep();
+      scheduleAmbientLoop();
+    },
+    AMBIENT_MS / Math.max(1, useSwarm.getState().speed / 2),
+  );
+}
+
+/** One ambient beat; exported for tests. */
+export function ambientStep() {
+  const get = useSwarm.getState;
+  const tasks: (() => void)[] = [];
+  for (const [id, run] of Object.entries(ambientRuns)) {
+    if (run.at < run.plan.length)
+      tasks.push(() => {
+        const tick = run.plan[run.at++];
+        const r = applyTick(get().world, id, run.script, tick, clockNow());
+        useSwarm.setState({ world: r.world });
+        applyFxExternal(r.fx);
+      });
+  }
+  if (ambientVoteAt < ambientVotes.length)
+    tasks.push(() => {
+      const v = ambientVotes[ambientVoteAt++];
+      const r = applyPanelVote(
+        get().world,
+        v.panelId,
+        { vote: v.vote, reason: v.reason },
+        clockNow(),
+      );
+      useSwarm.setState({ world: r.world });
+      applyFxExternal(r.fx);
+    });
+  if (tasks.length) tasks[ambientTurn++ % tasks.length]();
+}
+
+function applyFxExternal(fx: Fx) {
+  const st = useSwarm.getState();
+  if (fx.audit.length) {
+    const time = demoTime();
+    auditQueue = auditQueue.then(async () => {
+      for (const d of fx.audit) {
+        const entry = await appendEntry(useSwarm.getState().audit, { time, ...d });
+        useSwarm.setState({ audit: [...useSwarm.getState().audit, entry] });
+      }
+      if (useSwarm.getState().chainCheck)
+        useSwarm.setState({ chainCheck: await verifyChain(useSwarm.getState().audit) });
+    });
+  }
+  for (const t of fx.toasts) st.pushToast(t);
+}
+
 /** Reset everything to the seed (used by tests). */
 export async function resetSwarm() {
-  for (const id of [...runs.keys()]) {
-    const r = runs.get(id);
-    if (r?.timer) clearTimeout(r.timer);
-    runs.delete(id);
-  }
+  for (const r of userRuns.values()) if (r.timer) clearTimeout(r.timer);
+  userRuns.clear();
+  ambientEnabled = false;
+  if (ambientTimer) clearTimeout(ambientTimer);
   await auditQueue;
   useSwarm.setState(freshState());
   await initAudit();
 }
 
-/** Wait until every queued audit write has finished (used by tests). */
 export function flushAudit() {
   return auditQueue;
 }
 
-export function isSimulating(jobId: string) {
-  return runs.has(jobId);
+export function isLive(id: string) {
+  return userRuns.has(id);
 }
 
 initAudit();

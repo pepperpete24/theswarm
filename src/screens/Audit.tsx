@@ -12,7 +12,7 @@ export function Audit() {
   const checkChain = useSwarm((st) => st.checkChain);
   const tamperOld = useSwarm((st) => st.tamperOld);
   const undo = useSwarm((st) => st.undoTamper);
-  const jobs = useSwarm((st) => st.jobs);
+  const world = useSwarm((st) => st.world);
   const [busy, setBusy] = useState(false);
 
   const brokenAt = check && !check.ok ? check.brokenAt : null;
@@ -31,9 +31,9 @@ export function Audit() {
           <span className="eyebrow">Record</span>
           <h1>Audit trail</h1>
           <p className="lede">
-            Every decision and hand-over is written here. Each entry carries a fingerprint of the
-            entry before it, so changing any old entry breaks the chain from that point on. This is
-            the ‘blockchain’ part of the swarm.
+            Every decision the swarm and its council make is written here. Each entry carries a
+            fingerprint of the entry before it, so changing any old entry breaks the chain from that
+            point on. This is the ‘blockchain’ part of the swarm.
           </p>
         </div>
       </div>
@@ -120,14 +120,17 @@ export function Audit() {
                     </span>
                   </span>
                   <span className={`${s.entryJob} small`}>
-                    {e.jobId &&
-                      (jobs.some((j) => j.id === e.jobId) ? (
-                        <Link to={`/jobs/${e.jobId}`} className="num">
-                          {e.jobId}
-                        </Link>
-                      ) : (
-                        <span className="num muted">{e.jobId}</span>
-                      ))}
+                    {e.ideaId && world.ideas[e.ideaId] ? (
+                      <Link to={`/ideas/${e.ideaId}`} className="num">
+                        {e.ideaId}
+                      </Link>
+                    ) : e.missionId && world.missions.some((m) => m.id === e.missionId) ? (
+                      <Link to={`/missions/${e.missionId}`} className="num">
+                        {e.missionId}
+                      </Link>
+                    ) : (
+                      <span className="num muted">{e.ideaId ?? e.missionId}</span>
+                    )}
                   </span>
                 </li>
               );

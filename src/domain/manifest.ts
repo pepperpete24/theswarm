@@ -1,17 +1,22 @@
 import { CODE_VERSION, DATASET, RUNNER_VERSION } from '../data/constants';
+import { providerOf } from './approval';
 import { shortHash } from './hash';
-import type { Member } from './types';
+import type { Idea, Member } from './types';
 
-/** Run receipt fields, always shown in this order. */
-export const MANIFEST_FIELDS = [
-  'Job',
-  'AI provider and model',
+/** Run receipt fields for one idea test, always shown in this order (section 4.1). */
+export const RECEIPT_FIELDS = [
+  'Idea',
+  'Mission',
+  'Proposed by',
   'Role version',
+  'Test plan fingerprint',
   'Tools allowed',
   'Tool calls made',
   'Data used',
   'Data fingerprint',
+  'Fresh data sealed',
   'Code version',
+  'Parameter sets tried',
   'Tokens used',
   'Estimated cost',
   'Started',
@@ -21,52 +26,49 @@ export const MANIFEST_FIELDS = [
   'Signed with device key',
 ] as const;
 
-const TOOLS_BY_ROLE: Record<string, string> = {
-  'Stop-loss researcher': 'market-data (read), features, experiments, sandbox',
-  'Market regime analyst': 'market-data (read), features, research-library',
-  'Short-term analyst': 'market-data (read), features, research-library',
-  'Data quality monitor': 'market-data (read), sandbox',
-  'Experiment worker': 'experiments, sandbox, market-data (read)',
-};
-
-export function providerFor(model: string): string {
-  return model.startsWith('Claude') ? `Anthropic · ${model}` : `OpenAI · ${model}`;
-}
-
-export interface ManifestInput {
-  jobId: string;
-  role: string;
-  member?: Member;
-  tokens?: number;
-  cost?: number;
-  started?: string;
-  finished?: string;
-  toolCalls?: number;
-}
-
 const WAITING = 'Waiting';
 
-/** Build the run receipt for a job. Every field is always present. */
-export function buildManifest(i: ManifestInput): Record<string, string> {
-  const m = i.member;
-  const roleSlug = i.role.toLowerCase().replace(/[^a-z]+/g, '-');
+export interface ReceiptInput {
+  idea: Pick<Idea, 'id' | 'missionId' | 'agentRole' | 'model' | 'specHash' | 'result'>;
+  proposer?: Member;
+  tester?: Member;
+  started?: string;
+  finished?: string;
+  freshSealed?: boolean;
+}
+
+export const specHashFor = (ideaId: string, title: string) =>
+  `sha256:${shortHash(`${ideaId}|${title}|plan`, 16)}`;
+
+/** Build the run receipt for an idea test. Every field is always present. */
+export function buildReceipt(i: ReceiptInput): Record<string, string> {
+  const r = i.idea.result;
+  const roleSlug = i.idea.agentRole.toLowerCase().replace(/[^a-z]+/g, '-');
+  const t = i.tester;
   return {
-    Job: i.jobId,
-    'AI provider and model': m ? providerFor(m.model) : 'Not assigned yet',
-    'Role version': `${roleSlug} v1.3 · ${shortHash(i.role + 'v1.3', 7)}`,
-    'Tools allowed': TOOLS_BY_ROLE[i.role] ?? 'market-data (read), research-library',
-    'Tool calls made': i.toolCalls !== undefined ? String(i.toolCalls) : WAITING,
+    Idea: i.idea.id,
+    Mission: i.idea.missionId,
+    'Proposed by': i.proposer
+      ? `${i.proposer.name}’s agent · ${providerOf(i.idea.model)} · ${i.idea.model}`
+      : i.idea.model,
+    'Role version': `${roleSlug} v5 · ${shortHash(i.idea.agentRole + 'v5', 7)}`,
+    'Test plan fingerprint': i.idea.specHash ?? 'Not registered yet',
+    'Tools allowed': 'market-data (read), features, experiments (registered specs only), sandbox',
+    'Tool calls made': r ? String(Math.round(r.trials * 0.6 + 9)) : WAITING,
     'Data used': DATASET,
-    'Data fingerprint': `sha256:${shortHash(DATASET + i.jobId, 16)}`,
+    'Data fingerprint': `sha256:${shortHash(DATASET + i.idea.missionId, 16)}`,
+    'Fresh data sealed': i.freshSealed === false ? 'No: opened for the fresh-data check' : 'Yes',
     'Code version': CODE_VERSION,
-    'Tokens used': i.tokens ? i.tokens.toLocaleString('en-GB') : WAITING,
-    'Estimated cost': i.cost !== undefined ? `$${i.cost.toFixed(2)}` : WAITING,
+    'Parameter sets tried': r ? r.trials.toLocaleString('en-GB') : WAITING,
+    'Tokens used': r ? Math.round(r.computeCost * 41000 + 2200).toLocaleString('en-GB') : WAITING,
+    'Estimated cost': r ? `$${r.computeCost.toFixed(2)}` : WAITING,
     Started: i.started ?? WAITING,
     Finished: i.finished ?? WAITING,
     'Runner version': RUNNER_VERSION,
-    Device: m ? m.device : WAITING,
-    'Signed with device key': m
-      ? `ed25519:${shortHash(m.device + i.jobId + (i.finished ?? ''), 24)}`
-      : 'Not signed yet',
+    Device: t ? t.device : WAITING,
+    'Signed with device key':
+      t && i.finished
+        ? `ed25519:${shortHash(t.device + i.idea.id + i.finished, 24)}`
+        : 'Not signed yet',
   };
 }

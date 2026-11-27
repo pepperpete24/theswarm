@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ASKABLE_ROLES, EXAMPLE_FRESH } from '../data/constants';
+import { EXAMPLE_FRESH, PHASES } from '../data/constants';
+import { phaseIndex } from '../domain/status';
 import { useSwarm } from '../store/useSwarm';
 import { Icon } from './Icon';
 import s from './Tour.module.css';
@@ -8,48 +9,63 @@ import s from './Tour.module.css';
 interface Step {
   title: string;
   body: string;
-  route: (jobId: string | null) => string;
+  route: (missionId: string | null) => string;
 }
 
 const STEPS: Step[] = [
   {
-    title: 'What the swarm is',
-    body: 'A research club. Members lend their own computer and AI (Claude or Codex) to a shared pool that studies one market: EURUSD. Every finding is checked twice by AIs and once by a person.',
+    title: 'A swarm, not a relay',
+    body: 'Members lend their own agents (Claude or Codex) to a shared swarm studying EURUSD. Many agents work on a goal at once, a council judges the evidence, and the council approves what is published. Nobody needs to click anything.',
     route: () => '/',
   },
   {
-    title: 'Ask a question',
-    body: 'Anyone can ask. Press “Ask for me” and the tour fills in the Friday example and sends it. The platform first checks it hasn’t been answered already and that the budget allows it.',
-    route: () => '/ask',
+    title: 'One mission, 47 ideas',
+    body: 'M-12 is trying to beat the current stop-loss best. Every dot is an idea from a member’s agent. The dashed line is the bar to beat: it rises as more ideas are tried, so a lucky result can’t pass as a discovery.',
+    route: () => '/missions/M-12',
   },
   {
-    title: 'Watch the job run',
-    body: 'One member’s AI takes the job and checks in every 15 seconds. When it hands in, a different member’s AI redoes the work on its own. Watch the agreement score in the middle.',
-    route: (id) => (id ? `/jobs/${id}` : '/board'),
+    title: 'The council',
+    body: 'The red team upheld two objections: one idea was overfitted, another used a price that wasn’t known yet. The synthesiser turned the overfitted model into a cheaper, simpler rule. Verdicts come from the gates, not votes.',
+    route: () => '/council/C-12-1',
   },
   {
-    title: 'A person decides',
-    body: 'When both AIs agree, the editor AI writes a draft and the job waits here. No AI can publish. Once your job arrives (about 23 seconds after you asked), approve it.',
-    route: () => '/review',
+    title: 'Where alternatives come from',
+    body: 'The family tree shows how alternatives grew from earlier ideas, including the cheaper route built from the rejected model. Alternatives can spawn alternatives, up to the depth limit.',
+    route: () => '/missions/M-12?tab=tree',
   },
   {
-    title: 'What viewers see',
-    body: 'Approved posts appear with when the data was seen, when it was published, when it expires and what would prove it wrong. Expired and withdrawn posts are never hidden.',
-    route: () => '/published',
+    title: 'Start a mission',
+    body: 'Press “Launch for me”. The tour fills in the take-profit goal, the library is checked, and it runs at 2× speed. Notice the current best it has to beat.',
+    route: () => '/new',
   },
   {
-    title: 'Where the money went',
-    body: 'Each job sets aside the most it may cost before it starts. A job is refused if it would pass the $25 daily limit or the member’s own $5 limit.',
-    route: () => '/budgets',
+    title: 'Watch the whole swarm work',
+    body: 'Ideas arrive from many members, including the Pathfinder’s different routes. Code tests them, the council judges them, alternatives go back to the swarm, and the shortlist is checked on sealed fresh data.',
+    route: (id) => (id ? `/missions/${id}` : '/missions'),
   },
   {
-    title: 'Members stay in control',
-    body: 'Members choose their roles, hours and limits, and can pause at any time. A paused member’s AI gets no new jobs. Try pausing someone.',
-    route: () => '/contributors',
+    title: 'The council approves',
+    body: 'A fresh panel of 5, across two AI providers, none of whom worked on it, votes with reasons. It needs 4 of 5 and no reject citing a broken rule. Then it publishes by itself. The Red team v4 promotion panel is voting too.',
+    route: () => '/approvals',
+  },
+  {
+    title: 'It remembers, including the failures',
+    body: 'Proven findings, dead ends, warnings and open questions all go into the library, so the next mission starts smarter. Open questions can become missions the swarm starts on its own.',
+    route: () => '/library',
+  },
+  {
+    title: 'Every result is there to be beaten',
+    body: 'Your mission’s winner became the take-profit current best, and the Challenger has already queued a challenge to it. The Coach reviews how each mission went; changes, even to the approval rule, must beat what they replace.',
+    route: () => '/improvement',
+  },
+  {
+    title: 'Does it earn its keep?',
+    body: 'The swarm compared against simpler set-ups on the same missions, with costs counted. The numbers are honest: at the same budget it only narrowly beats a small team.',
+    route: () => '/scoreboard',
   },
   {
     title: 'A record that can’t be changed quietly',
-    body: 'Each entry carries a fingerprint of the one before it. Press “Try changing an old entry”, then “Check the chain”: it breaks at entry 8. Then undo the change and check again.',
+    body: 'Change entry 8 (a council verdict), then check the chain: it breaks at entry 8. Undo it. Meanwhile the swarm has already queued its next missions by itself.',
     route: () => '/audit',
   },
 ];
@@ -59,26 +75,22 @@ export function Tour() {
   const setStep = useSwarm((st) => st.setTourStep);
   const speed = useSwarm((st) => st.speed);
   const setSpeed = useSwarm((st) => st.setSpeed);
-  const jobs = useSwarm((st) => st.jobs);
-  const submit = useSwarm((st) => st.submitQuestion);
-  const approve = useSwarm((st) => st.approve);
+  const missions = useSwarm((st) => st.world.missions);
+  const launch = useSwarm((st) => st.launch);
   const tamperOld = useSwarm((st) => st.tamperOld);
   const checkChain = useSwarm((st) => st.checkChain);
   const tamper = useSwarm((st) => st.tamper);
   const chainCheck = useSwarm((st) => st.chainCheck);
   const undoTamper = useSwarm((st) => st.undoTamper);
-  const togglePause = useSwarm((st) => st.togglePause);
-  const members = useSwarm((st) => st.members);
   const navigate = useNavigate();
-  const { pathname } = useLocation();
-  // The tour remembers its own job only in memory.
-  const jobId = useRef<string | null>(null);
+  const { pathname, search } = useLocation();
+  const missionId = useRef<string | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (step === null) return;
-    const target = STEPS[step].route(jobId.current);
-    if (pathname !== target) navigate(target);
+    const target = STEPS[step].route(missionId.current);
+    if (pathname + search !== target) navigate(target);
     cardRef.current?.focus();
     // navigate only when the step changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,61 +107,41 @@ export function Tour() {
 
   if (step === null) return null;
   const cur = STEPS[step];
-  const tourJob = jobs.find((j) => j.id === jobId.current);
+  const tm = missions.find((m) => m.id === missionId.current);
 
-  const askForMe = () => {
-    const r = submit({
-      question: EXAMPLE_FRESH,
-      role: ASKABLE_ROLES[1],
-      maxCost: 1.5,
-      period: 'Last 2 years',
-    });
+  const launchForMe = () => {
+    setSpeed(2);
+    const r = launch({ goal: EXAMPLE_FRESH, budget: 40, swarmSize: 'whole' });
     if (r.kind === 'created') {
-      jobId.current = r.id;
-      setStep(2);
+      missionId.current = r.id;
+      setStep(5);
     }
   };
 
-  const gustavo = members.find((m) => m.id === 'gustavo');
-
   let action: React.ReactNode = null;
-  if (step === 1) {
-    action = tourJob ? (
+  if (step === 4) {
+    action = tm ? (
       <span className={s.done}>
-        <Icon name="check" size={14} /> Sent as {tourJob.id}
+        <Icon name="check" size={14} /> Launched as {tm.id}
       </span>
     ) : (
-      <button type="button" className="btn btn-primary btn-sm" onClick={askForMe}>
-        Ask for me
+      <button type="button" className="btn btn-primary btn-sm" onClick={launchForMe}>
+        Launch for me
       </button>
     );
-  } else if (step === 3) {
-    if (!tourJob) action = <span className="muted small">Go back a step and ask first.</span>;
-    else if (tourJob.state === 'human')
+  } else if (step === 5 || step === 6 || step === 8) {
+    if (!tm) action = <span className="muted small">Go back to step 5 and launch first.</span>;
+    else {
+      const i = phaseIndex(tm.phase);
       action = (
-        <button type="button" className="btn btn-good btn-sm" onClick={() => approve(tourJob.id)}>
-          Approve {tourJob.id} for me
-        </button>
-      );
-    else if (tourJob.state === 'published')
-      action = (
-        <span className={s.done}>
-          <Icon name="check" size={14} /> {tourJob.id} published
+        <span className={tm.phase === 'learned' ? s.done : 'muted small'}>
+          {tm.phase === 'learned' && <Icon name="check" size={14} />} {tm.id}:{' '}
+          {i >= 0 ? `phase ${i + 1} of 10, ${PHASES[i]}` : tm.phase}
+          {tm.phase === 'learned' ? ', done' : '…'}
         </span>
       );
-    else
-      action = (
-        <span className="muted small">
-          {tourJob.id} is still running, step {tourJob.step + 1} of 10…
-        </span>
-      );
-  } else if (step === 6 && gustavo) {
-    action = (
-      <button type="button" className="btn btn-sm" onClick={() => togglePause('gustavo')}>
-        {gustavo.online ? 'Pause Gustavo R. for me' : 'Resume Gustavo R.'}
-      </button>
-    );
-  } else if (step === 7) {
+    }
+  } else if (step === 10) {
     if (!tamper && chainCheck?.ok)
       action = (
         <>
@@ -203,7 +195,11 @@ export function Tour() {
           <Icon name="x" size={16} />
         </button>
       </div>
-      <div className={s.progress} aria-hidden>
+      <div
+        className={s.progress}
+        style={{ gridTemplateColumns: `repeat(${STEPS.length}, 1fr)` }}
+        aria-hidden
+      >
         {STEPS.map((_, i) => (
           <span key={i} className={i <= step ? s.on : undefined} />
         ))}
@@ -218,7 +214,7 @@ export function Tour() {
           <input
             type="checkbox"
             checked={speed > 1}
-            onChange={(e) => setSpeed(e.target.checked ? 3 : 1)}
+            onChange={(e) => setSpeed(e.target.checked ? 2 : 1)}
           />
           Fast simulation
         </label>

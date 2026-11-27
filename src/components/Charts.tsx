@@ -63,6 +63,7 @@ export function Sparkline({
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className={s.spark}
+        style={{ height }}
         role="img"
         aria-label={ariaLabel}
         preserveAspectRatio="none"

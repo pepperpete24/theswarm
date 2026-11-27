@@ -30,6 +30,13 @@ const paths: Record<string, string> = {
   plug: 'M9 7V3M15 7V3M6 7h12v4a6 6 0 0 1-12 0zM12 17v4',
   scale: 'M12 4v16M5 8h14M5 8l-3 6a3 3 0 0 0 6 0zM19 8l-3 6a3 3 0 0 0 6 0zM8 20h8',
   tour: 'M3 11l18-8-8 18-2-8z',
+  target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM12 12h.01',
+  missions: 'M4 6h11M4 12h16M4 18h8M18 4l2 2-2 2M15 16l2 2-2 2',
+  council: 'M12 3l9 4H3zM5 10v7M9.5 10v7M14.5 10v7M19 10v7M3 20h18',
+  book: 'M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2zM4 19V5M8 7h7',
+  trend: 'M3 17l6-6 4 4 7-8M15 7h5v5',
+  stop: 'M8 3h8l5 5v8l-5 5H8l-5-5V8zM9 9h6v6H9z',
+  spark: 'M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6',
   external: 'M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5',
 };
 

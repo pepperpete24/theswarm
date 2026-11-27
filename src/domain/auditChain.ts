@@ -3,9 +3,9 @@ import type { AuditDraft, AuditEntry } from './types';
 
 export const GENESIS = '0'.repeat(64);
 
-/** hash = SHA-256(prevHash + time + who + action + jobId) */
+/** hash = SHA-256(prevHash + time + who + action + missionId + ideaId) */
 export function hashInput(prevHash: string, e: AuditDraft): string {
-  return prevHash + e.time + e.who + e.action + (e.jobId ?? '');
+  return prevHash + e.time + e.who + e.action + (e.missionId ?? '') + (e.ideaId ?? '');
 }
 
 export async function computeHash(prevHash: string, e: AuditDraft): Promise<string> {

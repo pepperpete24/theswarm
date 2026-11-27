@@ -178,3 +178,34 @@
     padding-bottom: 18px;
   }
 }
+
+.closed .track {
+  background: var(--grey);
+  border-color: var(--grey);
+}
+
+.closed .name {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* Explore → Alternatives loop marker when a mission is past round 1 */
+.loop {
+  position: relative;
+}
+
+.loop::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -6px;
+  height: 3px;
+  border-top: 1.5px dashed var(--accent-line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .current .track {
+    animation: none;
+  }
+}

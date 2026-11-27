@@ -1,91 +1,85 @@
-import { DAILY_SWARM_CAP, MAX_ACTIVE_JOBS, MEMBER_DAILY_CAP } from '../data/constants';
-import type { Job, Member } from './types';
-
-export const ACTIVE_STATES = ['queued', 'researching', 'rechecking', 'challenged'] as const;
-
-export function isActive(job: Job): boolean {
-  return (ACTIVE_STATES as readonly string[]).includes(job.state);
-}
+import { DAILY_SWARM_CAP } from '../data/constants';
+import { isRunning } from './library';
+import type { Member, Mission } from './types';
 
 export interface BudgetSummary {
-  /** Money already used today: charged member spend plus live spend on running jobs. */
   spent: number;
-  /** Money set aside for running jobs but not yet used. */
   setAside: number;
-  /** What is left for new jobs today. */
   free: number;
   cap: number;
 }
 
 export const money = (n: number) => `$${n.toFixed(2)}`;
-const round = (n: number) => Math.round(n * 100) / 100;
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Today: what members have been charged, what running missions still hold, and what is free. */
 export function summariseBudget(
-  jobs: Job[],
+  missions: Mission[],
   members: Member[],
   cap = DAILY_SWARM_CAP,
 ): BudgetSummary {
-  const charged = members.reduce((s, m) => s + m.spentToday, 0);
-  const live = jobs.filter((j) => !j.charged && isActive(j));
-  const liveSpent = live.reduce((s, j) => s + j.spent, 0);
-  const setAside = live.reduce((s, j) => s + Math.max(0, j.reserved - j.spent), 0);
-  const spent = charged + liveSpent;
+  const spent = members.reduce((s, m) => s + m.spentToday, 0);
+  const setAside = missions
+    .filter(isRunning)
+    .reduce((s, m) => s + Math.max(0, m.reserved - m.spent), 0);
   return {
-    spent: round(spent),
-    setAside: round(setAside),
-    free: round(Math.max(0, cap - spent - setAside)),
+    spent: r2(spent),
+    setAside: r2(setAside),
+    free: r2(Math.max(0, cap - spent - setAside)),
     cap,
   };
 }
 
-/** Members who could take a job of this size right now. */
-export function eligibleMembers(
-  members: Member[],
-  maxCost: number,
-  exclude: string[] = [],
-): Member[] {
-  return members.filter(
-    (m) => m.online && !exclude.includes(m.id) && m.spentToday + maxCost <= m.dailyCap,
-  );
-}
-
 export type Admission = { ok: true } | { ok: false; reason: string; fix: string };
 
-/** The platform's admission check for a new job, with plain-language reasons on refusal. */
-export function admit(
-  maxCost: number,
-  jobs: Job[],
-  members: Member[],
-  exclude: string[] = [],
-): Admission {
-  if (!Number.isFinite(maxCost) || maxCost <= 0) {
+/** Admission check for a new mission, with plain-language reasons on refusal. */
+export function admitMission(budget: number, missions: Mission[], members: Member[]): Admission {
+  if (!Number.isFinite(budget) || budget <= 0)
     return {
       ok: false,
-      reason: 'The most it may cost has to be more than $0.',
-      fix: 'Enter an amount such as $1.50.',
+      reason: 'The budget has to be more than $0.',
+      fix: 'Enter an amount such as $40.',
     };
-  }
-  const budget = summariseBudget(jobs, members);
-  if (maxCost > budget.free) {
+  const b = summariseBudget(missions, members);
+  if (budget > b.free)
     return {
       ok: false,
-      reason: `This job could cost up to ${money(maxCost)}, but only ${money(budget.free)} of today's $${budget.cap} limit is free. The rest is spent or set aside for jobs that are running.`,
-      fix: `Lower the most it may cost to ${money(budget.free)} or less, or wait for running jobs to finish and hand back what they didn't use.`,
+      reason: `This mission could cost up to ${money(budget)}, but only ${money(b.free)} of today’s $${b.cap} limit is free. The rest is spent or set aside for missions that are running.`,
+      fix: `Lower the budget to ${money(b.free)} or less, or wait for a running mission to finish and hand back what it didn’t use.`,
     };
-  }
-  if (jobs.filter(isActive).length >= MAX_ACTIVE_JOBS) {
+  if (members.filter((m) => m.online).length < 5)
     return {
       ok: false,
-      reason: `The swarm is already running ${MAX_ACTIVE_JOBS} jobs, which is the pilot's limit.`,
-      fix: 'Try again when one finishes.',
+      reason:
+        'Fewer than 5 members are online, so the council and approval panels can’t be seated.',
+      fix: 'Resume a paused member on the Contributors page.',
     };
-  }
-  if (eligibleMembers(members, maxCost, exclude).length === 0) {
-    return {
-      ok: false,
-      reason: `No online member has ${money(maxCost)} left under their own $${MEMBER_DAILY_CAP}-a-day limit.`,
-      fix: 'Lower the most it may cost, or resume a paused member on the Contributors page.',
-    };
-  }
   return { ok: true };
+}
+
+/**
+ * Charge an amount to members, starting with the preferred ones, never past
+ * anyone's own daily limit. Anything left over is carried by hosted workers.
+ */
+export function chargeMembers(members: Member[], amount: number, preferred: string[]): Member[] {
+  let left = amount;
+  const order = [
+    ...preferred,
+    ...members.filter((m) => m.online && !preferred.includes(m.id)).map((m) => m.id),
+  ];
+  const add = new Map<string, number>();
+  const share = amount / Math.max(1, preferred.length || 1);
+  for (const id of order) {
+    if (left <= 0.0001) break;
+    const m = members.find((x) => x.id === id);
+    if (!m) continue;
+    const room = m.dailyCap - m.spentToday - (add.get(id) ?? 0);
+    const take = Math.min(room, preferred.includes(id) ? share : left, left);
+    if (take <= 0) continue;
+    add.set(id, (add.get(id) ?? 0) + take);
+    left -= take;
+  }
+  return members.map((m) =>
+    add.has(m.id) ? { ...m, spentToday: r2(m.spentToday + add.get(m.id)!) } : m,
+  );
 }

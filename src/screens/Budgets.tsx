@@ -1,46 +1,44 @@
 import { Link } from 'react-router-dom';
-import { DAILY_SWARM_CAP, MEMBER_DAILY_CAP } from '../data/constants';
-import { isActive, money, summariseBudget } from '../domain/budget';
+import { DAILY_SWARM_CAP, MEMBER_DAILY_CAP, SELF_START_BUDGET } from '../data/constants';
+import { money, summariseBudget } from '../domain/budget';
 import { ColumnChart, HBarChart, SegmentBar } from '../components/Charts';
-import { JobPill } from '../components/Pill';
-import { useSwarm } from '../store/useSwarm';
+import { MissionPill } from '../components/Pill';
+import { useWorld } from './hooks';
 import s from './screens.module.css';
 
 /** Made-up totals for the six days before today. */
 const PAST_DAYS = [
-  { label: 'Fri', value: 17.4 },
-  { label: 'Sat', value: 6.2 },
-  { label: 'Sun', value: 4.9 },
-  { label: 'Mon', value: 21.8 },
-  { label: 'Tue', value: 19.35 },
-  { label: 'Wed', value: 23.1 },
+  { label: 'Sat', value: 41.2 },
+  { label: 'Sun', value: 18.6 },
+  { label: 'Mon', value: 96.4 },
+  { label: 'Tue', value: 104.1 },
+  { label: 'Wed', value: 88.7 },
+  { label: 'Thu', value: 112.3 },
 ];
 
 export function Budgets() {
-  const jobs = useSwarm((st) => st.jobs);
-  const members = useSwarm((st) => st.members);
-  const b = summariseBudget(jobs, members);
-
-  // Live spend on running jobs counts against the member doing the work.
-  const memberSpend = members.map((m) => ({
-    m,
-    value:
-      m.spentToday +
-      jobs
-        .filter((j) => isActive(j) && !j.charged && j.agentId === m.id)
-        .reduce((t, j) => t + j.spent, 0),
-  }));
-
+  const w = useWorld();
+  const b = summariseBudget(w.missions, w.members);
   const byModel = new Map<string, number>();
-  memberSpend.forEach(({ m, value }) => byModel.set(m.model, (byModel.get(m.model) ?? 0) + value));
+  w.members.forEach((m) => byModel.set(m.model, (byModel.get(m.model) ?? 0) + m.spentToday));
   const modelRows = [...byModel.entries()]
-    .sort((a, b2) => b2[1] - a[1])
+    .sort((a, c) => c[1] - a[1])
     .map(([label, value]) => ({ label, value }));
-
+  const phase = { explore: 0, test: 0, council: 0, fresh: 0, approval: 0 };
+  for (const m of w.missions)
+    for (const k of Object.keys(phase) as (keyof typeof phase)[]) phase[k] += m.spendByPhase[k];
+  const phaseRows = [
+    { label: 'Exploring', value: phase.explore },
+    { label: 'Testing', value: phase.test },
+    { label: 'Council', value: phase.council },
+    { label: 'Fresh-data check', value: phase.fresh },
+    { label: 'Approval', value: phase.approval },
+  ];
   const days = [...PAST_DAYS, { label: 'Today', value: b.spent }];
-  const expensive = [...jobs]
-    .sort((a, c) => Math.max(c.spent, c.reserved) - Math.max(a.spent, a.reserved))
-    .slice(0, 6);
+  const expensive = [...w.missions]
+    .filter((m) => m.spent > 0)
+    .sort((a, c) => c.spent - a.spent)
+    .slice(0, 7);
 
   return (
     <div className="page">
@@ -49,8 +47,8 @@ export function Budgets() {
           <span className="eyebrow">Spending</span>
           <h1>Budgets</h1>
           <p className="lede">
-            Every job sets aside the most it may cost before it starts. Whatever it doesn’t use goes
-            back to the pool when it closes.
+            Every mission sets aside its budget before it starts. Whatever it doesn’t use goes back
+            to the pool when it closes. The owner sets these limits; agents can’t change them.
           </p>
         </div>
       </div>
@@ -70,7 +68,7 @@ export function Budgets() {
           <div className={s.budgetNum}>
             <b>{money(b.setAside)}</b>
             <span>
-              <i style={{ background: 'var(--warn-dot)' }} /> Set aside for running jobs
+              <i style={{ background: 'var(--warn-dot)' }} /> Set aside for running missions
             </span>
           </div>
           <div className={s.budgetNum}>
@@ -93,28 +91,23 @@ export function Budgets() {
           ]}
         />
         <p className="footnote" style={{ marginTop: 12 }}>
-          A new job is refused if it would push the total past the daily limit, or past its member’s
-          own limit of ${MEMBER_DAILY_CAP} a day.
+          A new mission is refused if it would push the total past the daily limit. No member is
+          charged more than ${MEMBER_DAILY_CAP} a day. Missions the swarm starts itself come out of
+          a ${SELF_START_BUDGET} self-start budget.
         </p>
       </section>
 
       <div className="grid-2">
-        <section className="panel" aria-labelledby="mem-h">
+        <section className="panel" aria-labelledby="phase-h">
           <div className="panel-head">
-            <h2 id="mem-h">Spend by member today</h2>
-            <p>The tick marks each member’s own limit.</p>
+            <h2 id="phase-h">Spend by phase, all missions</h2>
+            <p>Exploring and the council are cheap; the numbers are done by code.</p>
           </div>
           <HBarChart
-            ariaLabel="Spend by member today"
-            max={MEMBER_DAILY_CAP}
+            ariaLabel="Spend by phase"
+            max={Math.max(...phaseRows.map((r) => r.value)) * 1.1}
             format={money}
-            rows={memberSpend.map(({ m, value }) => ({
-              label: m.name,
-              sub: m.online ? m.model : `${m.model} · paused`,
-              value,
-              limit: m.dailyCap,
-              muted: !m.online,
-            }))}
+            rows={phaseRows}
           />
         </section>
         <section className="panel" aria-labelledby="model-h">
@@ -130,6 +123,25 @@ export function Budgets() {
         </section>
       </div>
 
+      <section className="panel" aria-labelledby="mem-h">
+        <div className="panel-head">
+          <h2 id="mem-h">Spend by member today</h2>
+          <p>The tick marks each member’s own limit.</p>
+        </div>
+        <HBarChart
+          ariaLabel="Spend by member today"
+          max={MEMBER_DAILY_CAP}
+          format={money}
+          rows={w.members.map((m) => ({
+            label: m.name,
+            sub: m.online ? m.model : `${m.model} · paused`,
+            value: m.spentToday,
+            limit: m.dailyCap,
+            muted: !m.online,
+          }))}
+        />
+      </section>
+
       <section className="panel" aria-labelledby="week-h">
         <div className="panel-head">
           <h2 id="week-h">Last 7 days</h2>
@@ -139,37 +151,37 @@ export function Budgets() {
           data={days}
           limit={DAILY_SWARM_CAP}
           highlight={days.length - 1}
-          format={(n) => `$${n.toFixed(2)}`}
+          format={(n) => `$${n.toFixed(0)}`}
           ariaLabel={`Spend over the last 7 days. ${days.map((d) => `${d.label} ${money(d.value)}`).join(', ')}`}
         />
       </section>
 
       <section className="panel flush" aria-labelledby="exp-h">
         <div className="panel-head">
-          <h2 id="exp-h">Most expensive jobs</h2>
+          <h2 id="exp-h">Missions by spend</h2>
         </div>
-        <div className="table-wrap" tabIndex={0} aria-label="Most expensive jobs, scrolls sideways">
+        <div className="table-wrap" tabIndex={0} aria-label="Missions by spend, scrolls sideways">
           <table className="table" style={{ minWidth: 640 }}>
             <thead>
               <tr>
-                <th>Job</th>
-                <th>Question</th>
+                <th>Mission</th>
+                <th>Goal</th>
                 <th className="r">Spent</th>
                 <th className="r">Set aside</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {expensive.map((j) => (
-                <tr key={j.id}>
+              {expensive.map((m) => (
+                <tr key={m.id}>
                   <td className="num">
-                    <Link to={`/jobs/${j.id}`}>{j.id}</Link>
+                    <Link to={`/missions/${m.id}`}>{m.id}</Link>
                   </td>
-                  <td>{j.question}</td>
-                  <td className="r num">{money(j.spent)}</td>
-                  <td className="r num">{money(j.reserved)}</td>
+                  <td>{m.title}</td>
+                  <td className="r num">{money(m.spent)}</td>
+                  <td className="r num">{money(m.reserved)}</td>
                   <td>
-                    <JobPill job={j} />
+                    <MissionPill mission={m} />
                   </td>
                 </tr>
               ))}
@@ -178,8 +190,8 @@ export function Budgets() {
         </div>
       </section>
       <p className="footnote">
-        Costs are estimates worked out from the tokens each AI reports. The $25 swarm limit and $5
-        member limit are placeholders for the pilot to confirm.
+        Costs are estimates worked out from the tokens each agent reports. All limits are
+        placeholders for the pilot to confirm.
       </p>
     </div>
   );
