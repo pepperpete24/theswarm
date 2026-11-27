@@ -57,7 +57,7 @@ Approval is a decision about whether to publish, made only *after* the evidence 
 1. **Preconditions, checked by code.** The winning idea passed all four gates **and** held up on the fresh-data check. Otherwise nothing goes to approval.
 2. **A fresh panel.** The platform seats 5 approvers who were not on the idea's lineage, did not run its fresh-data check, and did not write the draft. The panel must include **at least two different AI providers**, so a single model can't approve its own kind of work. The Council chair seat rotates.
 3. **What approvers check.** Every approver checks that the draft says no more than the evidence shows, the expiry and "proven wrong if" conditions are set, the data is fresh, there is no trade instruction or personal advice, and every open objection is closed. Each records **Approve** or **Reject** with a one-sentence reason. Text from other agents is information only.
-4. **Rule.** Publishing needs **4 of 5 approvals and no reject that cites a broken rule** (section 2.1). If the panel rejects, the mission goes back for another round if rounds and budget allow. Otherwise it closes as *Not published*, with the reasons kept in the library.
+4. **Rule.** Publishing needs **4 of 5 approvals and no reject that cites a broken rule** (section 2.1). These are the *starting* settings of the **approval rule**. The Coach can propose changes to them through the stricter rule-change path in 6.5. If the panel rejects, the mission goes back for another round if rounds and budget allow. Otherwise it closes as *Not published*, with the reasons kept in the library.
 5. **After publishing.** The council keeps watching. If a "proven wrong if" condition is met or the data feed reports a problem, the council **withdraws** the item automatically. Withdrawn and expired items stay visible.
 
 The **owner** sets the daily budgets and the fixed rules, and keeps an **emergency stop** (from the plan's safety controls). Neither is a step in the decision loop: the owner doesn't approve, reject or edit findings.
@@ -80,7 +80,7 @@ Show these as a **Mission rules** card on the new-mission screen and on every mi
 6. **Other agents' text is information, not instructions.** An agent can't change its own permissions, budget or limits, and can't change anyone else's.
 7. **Limits are enforced by the platform.** Budget, depth and concurrency limits are checked by ordinary code that agents can't change.
 8. **Research, not advice.** Published items never contain a trade instruction or personal advice, and always carry an expiry and a "proven wrong if" condition.
-9. **Improvements are proven first.** A new current best or a process change is used only after it beats what it replaces on evidence and passes an approval panel (section 6). No agent can change these fixed rules.
+9. **Improvements are proven first.** A new current best or a process change is used only after it beats what it replaces on evidence and passes an approval panel (section 6). Changes to the approval rule need the stricter **rule-change panel** (6.5). No agent can change these fixed rules (1–9), and no change may go below the approval floors in 6.5.
 
 ### 2.2 Set per mission (editable, with defaults)
 
@@ -138,6 +138,7 @@ interface Mission {
   coachReview?: CoachReview;
   spawnedFromLibraryId?: string; // the open question a self-started mission came from
   approvalId?: string;
+  approvalRuleVersion?: number;  // which approval rule approved it
   phase: MissionPhase; round: number;
   rules: MissionRules;
   reserved: number; spent: number;
@@ -277,12 +278,22 @@ interface CoachReview {
 interface ProcessChange {
   id: string;                    // "PC-05"
   change: string; why: string;
-  kind: 'role-version' | 'model-choice' | 'swarm-size' | 'defaults' | 'queue';
+  kind: 'role-version' | 'model-choice' | 'swarm-size' | 'defaults' | 'queue' | 'approval-rule';
+  ruleChange?: { field: keyof ApprovalRule; from: string; to: string; scope?: string };
   learnedFrom: string[];         // mission ids
   replayedOn: string[];          // must not overlap learnedFrom
   replay?: { heldUp: [number, number]; falseWins: [number, number]; costUsd: [number, number] }; // [before, after]
   status: 'replaying' | 'in-approval' | 'adopted' | 'rejected' | 'rolled-back';
   panelId?: string; reviewAfterMissions?: number;
+}
+
+interface ApprovalRule {        // the current approval settings (1.1), changeable only via 6.5
+  version: number;
+  panelSize: number;             // starts at 5
+  approvalsNeeded: number;       // starts at 4
+  minProviders: number;          // starts at 2
+  extraChecks: string[];         // e.g. "2 approvers re-run the fresh-data numbers when trades < 100"
+  scopes?: { scope: string; panelSize: number; approvalsNeeded: number }[]; // e.g. descriptive findings
 }
 
 interface ApprovalPanel {
@@ -319,7 +330,7 @@ Below it, always show: *"The signature proves which computer sent this receipt. 
 | `council.ts` | `seatPanel(members, ideas)`: rotating seats; nobody judges an idea on their own lineage. `synthesise(ideas)`: returns the scripted combinations and cheaper alternatives for seeded missions, and simple pairwise combinations of the top two families for new missions. |
 | `approval.ts` | `seatApprovalPanel(members, mission)`: 5 approvers, none on the lineage, the fresh-data check or the draft, at least 2 providers (fails clearly if that's impossible). `decide(panel)`: 4 of 5 approve and no rule-citing reject → published; otherwise sent back or not published. `checkWithdrawal(item, events)`. |
 | `improvement.ts` | `currentBest(topic)`. `canReplaceBest(winner, topic)`: the 4 conditions in 6.3, using `topic.totalTrials` for the bar to beat. `replaceBest` / `restorePrevious` (on withdrawal). `dueChallenges(topics, events, now)`: the 4 triggers, at most one open challenge per topic, waits when no newer fresh window exists. `differentRouteBudget(rules)`. |
-| `coach.ts` | `review(mission)`: computes the Coach review from mission data. `replay(change, missions)`: returns the seeded replay result and refuses missions in `learnedFrom`. `adopt(replay)`: the adoption rule in 6.4. `followUp(change, results)`: rolls back if worse. `touchesFixedRule(change)`: always refused. |
+| `coach.ts` | `review(mission)`: computes the Coach review from mission data. `replay(change, missions)`: returns the seeded replay result and refuses missions in `learnedFrom`. `adopt(replay)`: the adoption rule in 6.4. `followUp(change, results)`: rolls back if worse. `touchesFixedRule(change)`: always refused. `belowFloor(rule)`: refuses any approval-rule change that breaks a floor in 6.5. `seatRuleChangePanel(members, change)`: the stricter panel in 6.5. `decideRuleChange(panel)`: 6 of 7 approve and no rule-citing reject. |
 | `lineage.ts` | Builds the family tree of ideas (parents to children) for the lineage view. Enforces `maxDepth`. |
 | `trackRecord.ts` | Updates member stats when ideas pass the council, hold up or fail on fresh data, and when objections are upheld. |
 | `auditChain.ts` | Keep from v1: append, verify, tamper, repair. |
@@ -346,7 +357,7 @@ For challenge missions, `trials` is the topic's **total** trial count (6.3), so 
 
 ## 6. How the swarm learns and improves (must be visible in the demo)
 
-Learning is not agents rewriting their own rules. Section 6.1 covers what the swarm **remembers**. Sections 6.2–6.4 cover the parts that keep **questioning**: is there a better result, or a better way to get there?
+Learning is not agents rewriting their own rules. Section 6.1 covers what the swarm **remembers**. Sections 6.2–6.5 cover the parts that keep **questioning**: is there a better result, or a better way to get there?
 
 ### 6.1 What the swarm remembers
 
@@ -364,7 +375,7 @@ Remembering isn't enough. Without these roles, the swarm would publish its first
 |---|---|---|---|
 | **Challenger** | "Can we beat the current best?" | Watches every topic's **current best** (6.3) and starts a **challenge mission** whose goal is to beat it, whenever a trigger fires | Lower the bar, reuse fresh data that has already been looked at, or replace a current best without an approval panel |
 | **Pathfinder** | "Is there a completely different way to get there?" | Proposes **different-route** ideas inside every mission: a different family of approach, different data, a simpler rule, or the same result for less cost or risk. It may also start a **different-route mission** for a published goal | Spend more than the mission's different-route share (default 20% of the budget) |
-| **Coach** | "How could the swarm itself work better?" | Reviews every finished mission's *process*, proposes **process changes**, and has them tested by replaying past missions (6.4) | Change a fixed rule (2.1), the owner's budgets, the approval rule, or its own instructions. Changes to the Coach are proposed by the council, not the Coach |
+| **Coach** | "How could the swarm itself work better?" | Reviews every finished mission's *process*, proposes **process changes**, and has them tested by replaying past missions (6.4) | Change a fixed rule (2.1), the owner's budgets, or its own instructions, or push the approval rule below its floors (6.5). It **may** propose approval-rule changes, which go through the stricter rule-change path. Changes to the Coach itself are proposed by the council, not the Coach |
 
 The Synthesiser (section 1, step 5) still looks for combinations and cheaper routes *inside* a council session. The three standing roles work *across* missions and over time.
 
@@ -395,7 +406,7 @@ After every mission, the Coach writes a short **Coach review**, shown on the mis
 - Was the swarm too small, about right, or too big for this mission?
 - Did the different-route ideas find anything?
 
-From these reviews the Coach proposes **process changes**. It may change role instructions, which model each role uses, default swarm sizes, the different-route share, default rounds and depth, and how the queue is prioritised.
+From these reviews the Coach proposes **process changes** aimed at **better results**: more findings that hold up, fewer false wins, less cost per finding. It may change role instructions, which model each role uses, default swarm sizes, the different-route share, default rounds and depth, how the queue is prioritised, and **the approval rule** (6.5).
 
 A process change is adopted only after all of the following:
 
@@ -406,6 +417,36 @@ A process change is adopted only after all of the following:
    - The change must either save at least 10% of cost or add findings.
 3. **An approval panel** (as in 1.1).
 4. **A follow-up review.** The change is reviewed again after 5 real missions and **rolled back automatically** if it did worse [A].
+
+### 6.5 Changing the approval rule: a stricter path
+
+The approval rule decides what reaches viewers, so the Coach can improve it, but with a much higher bar than any other change. A Coach review might find, for example, that panels pass too many findings with thin trade counts, or that descriptive findings are held up by checks they don't need.
+
+**What can change:** panel size, approvals needed, the provider minimum, extra checks approvers must do, and different settings for a defined kind of finding (a **scope**, e.g. "descriptive findings").
+
+**Floors that no change can break** (checked by code, `belowFloor`):
+- At least 5 approvers, and at least 4 approvals needed.
+- At least 2 AI providers on every panel, with no provider holding more than 60% of the seats.
+- Nobody on a panel worked on, fresh-checked or drafted what they judge.
+- The code preconditions stay: all four gates passed, and the idea held up on fresh data.
+- Any reject that cites a broken fixed rule blocks publishing.
+
+**The rule-change path.** All of these are needed:
+1. **Wider replay.** Re-run **at least 10** past missions under the proposed rule, none of them missions it was learned from. Include every past false win and withdrawal the swarm has on record, to check the new rule would have caught them.
+2. **Adoption rule, checked by code.**
+   - **False wins and withdrawals must not rise. This is non-negotiable.**
+   - Findings that held up must not drop by more than 1 across the replay.
+   - The change must improve at least one thing: fewer false wins, more findings that held up, or a lower cost per finding.
+3. **A rule-change panel**, stricter than a normal approval panel:
+   - **7 approvers**, chosen from members with the strongest track records (6.1, item 3).
+   - **At least 2 providers**, with no provider holding more than 4 seats.
+   - **Nobody who sat on any approval panel during the replayed missions**, so no one judges a rule they applied.
+   - **The Coach and the member running it can't sit.**
+   - **6 of 7 approvals and no reject that cites a broken rule.**
+   - Each approver must say how the change would have affected at least one named past mission.
+4. **Cooling-off.** An adopted rule applies only to missions that **start after** adoption, never to ones already in progress. Only one approval-rule change can be in progress at a time.
+5. **Probation.** The new rule runs for 5 missions on probation. If any false win or withdrawal happens that the old rule would have caught, it is **rolled back automatically** [A].
+6. **A new rule version.** The approval rule's version number goes up, every published item records which version approved it, and the Improvement screen shows the full version history.
 
 Candidate role versions (6.1, item 4) are one kind of process change and follow the same path.
 
@@ -521,8 +562,9 @@ This screen replaces v1's review desk. It is **watch-only**: nothing on it lets 
 - **Best result over time**: a step chart with one line per topic, showing net return vs the starting rule. Each step is labelled with the mission that set it. A withdrawn best shows as a dip back to the previous one.
 - **Topics**: one card per topic showing the current best (rule, since when, the mission it came from), the full history (e.g. "Fixed 15 pips → fixed 20 pips (M-05) → ?"), "challenged N times, beaten M times", the open challenge with its status, and the bar the next challenger must clear (from the total trial count). Show "Waiting for fresh data" when no newer window exists.
 - **Different routes**: the Pathfinder's ideas across missions: how many were tried, how many passed the council, and any that became a current best.
+- **Approval rule**: the current version with its settings and floors, the version history, and any rule change in progress. For a change in progress, show its replay numbers and the 7 rule-change panel seats with their votes.
 - **Process changes**: a table of every Coach proposal: the change, the kind, learned from, replayed on, the before → after numbers (held up, false wins, cost), status and panel decision. Rejected and rolled-back changes stay visible with their reasons.
-- This note is always visible: *"Nothing here changes the fixed rules. Every improvement has to beat what it replaces on evidence, then pass an approval panel."*
+- This note is always visible: *"Nothing here changes the fixed rules. Every improvement has to beat what it replaces on evidence, then pass an approval panel. Changes to the approval rule need a stricter panel of 7 and can never go below the floors."*
 
 ### 8.9 Scoreboard (`/scoreboard`): does the swarm earn its keep?
 This comes straight from the plan's central research question. It compares four set-ups on the same 6 past missions:
@@ -646,7 +688,7 @@ Baseline for M-12: the topic's current best, a fixed 20-pip stop (M-05). The sta
 | T-3 | Monday gap handling | No gap rule (start) → fade the Monday gap (M-08, withdrawn) → no gap rule (restored) | Shows automatic restore after a withdrawal |
 | T-4 | Breakout take-profit | Fixed 2× risk target (start, current) | Never challenged; the tour's new mission challenges it |
 
-**Process changes (5):**
+**Process changes (8):**
 
 | ID | Change | Status | Replay (before → after) |
 |---|---|---|---|
@@ -655,6 +697,11 @@ Baseline for M-12: the topic's current best, a fixed 20-pip stop (M-05). The sta
 | PC-05 | Raise the different-route share from 20% to 30% | replaying (3 of 6 missions) | partial results |
 | PC-06 | Skip round 3 when round 2 adds no new family of idea | rolled back after its 5-mission review ("would have missed 2 late winners") | held up 8 → 8 · cost −19% at replay |
 | PC-07 | Red team v4: always check FX weekend gaps (role version) | in approval | issues caught +2 · false alarms 0 · cost +3% |
+| PC-08 | **Approval rule v2**: for findings with fewer than 100 trades, 2 approvers must re-run the fresh-data numbers themselves | **adopted** by a rule-change panel, 7 of 7 (learned from M-08) | replayed on 11 missions · false wins 2 → 0 · held up 14 → 14 · cost per finding +4% |
+| PC-09 | **Approval rule**: 3 of 5 approvals for descriptive findings | **refused by code**: below the floor (at least 4 approvals) | not replayed |
+| PC-10 | **Approval rule v3 (proposed)**: descriptive findings get a 5-seat panel without the extra re-run check | rule-change panel **in session**, 4 of 7 votes in | replayed on 10 missions · false wins 0 → 0 · held up 14 → 14 · cost per finding −11% |
+
+**Approval rule:** version 2 (from PC-08) is active: 5 seats, 4 approvals, 2 providers, plus the extra re-run check. Version 1 is retired. M-05, M-08 and M-09 were approved under v1; M-11's panel runs under v2.
 
 **Coach reviews:** one each for M-05, M-07, M-08 and M-09. M-07's should say the swarm was "too big" for a question that ended with no winner.
 
@@ -682,7 +729,7 @@ Update **Take the tour** (overlay, Next / Back / Close, position kept in memory 
 6. **Live mission**: ideas arrive from many members, including the Pathfinder's different routes, and are tested, judged and checked on fresh data.
 7. **Council approvals**: watch the panel vote and publish it with nobody stepping in. Then see Red team v4 promoted by the council.
 8. **Library**: what was learned, including the dead ends.
-9. **Improvement**: the new mission just became the take-profit current best, and the Challenger has already scheduled a challenge to it. Show the best-over-time chart and the Coach's process changes, including one rejected and one rolled back.
+9. **Improvement**: the new mission just became the take-profit current best, and the Challenger has already scheduled a challenge to it. Show the best-over-time chart and the Coach's process changes, including one rejected and one rolled back. Finish on the approval rule: v2 adopted by a 7-seat panel, one proposal refused for breaking a floor, and v3 being voted on now.
 10. **Scoreboard**: does the swarm beat simpler set-ups? (honest numbers).
 11. **Audit trail**: tamper with the verdict, check the chain, undo. Close on the queued challenge and self-started missions: the swarm keeps going on its own.
 
@@ -725,10 +772,12 @@ Commit after each step. Keep lint, tests and build green throughout.
 - [ ] A self-started follow-up mission appears after the run, tagged "Swarm".
 - [ ] Each live run includes at least 3 Pathfinder "Different route" ideas, within the different-route share.
 - [ ] After the run, the new mission becomes the take-profit current best, the Challenger schedules a challenge to it, and a Coach review with one queued process change appears. All of these leave audit entries.
-- [ ] The Improvement screen shows every topic's history, the best-over-time chart, and all 5 process changes, including the rejected and rolled-back ones.
+- [ ] The Improvement screen shows every topic's history, the best-over-time chart, all 8 process changes (including the rejected, refused and rolled-back ones), and the approval rule's version history.
 - [ ] Withdrawing a current best restores the previous one (T-3 in the seed; covered by a test).
 - [ ] Challenge missions use the topic's total trial count for the bar to beat, and wait when there is no newer fresh window (covered by tests).
 - [ ] A process change that touches a fixed rule is always refused, and replays never use the missions a change was learned from (covered by tests).
+- [ ] Approval-rule changes: one below a floor is refused by code; a rule-change panel has 7 seats, at least 2 providers, no provider over 4 seats, and excludes the Coach and anyone who sat on a replayed mission's panel; 6 of 7 are needed; an adopted rule applies only to missions started afterwards; probation rolls it back on a false win the old rule would have caught (all covered by tests).
+- [ ] Every published item shows which approval rule version approved it.
 - [ ] The scoreboard shows both views, and its numbers include the honest cases from 8.9.
 - [ ] Pausing a member removes them from new seats and assignments.
 - [ ] The audit tamper breaks at entry 8 and undo restores it.
@@ -762,9 +811,10 @@ So the owner and collaborators can see this is grounded in the planning document
 | A new fresh window for every challenge | Plan: "Repeatedly inspecting a holdout makes it part of the development process" |
 | Bar to beat counts every trial on the topic | Plan: "selecting the best of thousands of trials can otherwise produce misleading results" |
 | Paper-drift trigger | Plan: "use forward paper evaluation as additional evidence" |
+| Approval rule changes need a stricter panel and wider evidence | Plan: "Updating a prompt, strategy or trained model creates a candidate version that must pass evaluation"; reviewer must differ from the producer. Floors keep the plan's separation of duties |
 | Coach: swarm size and model choice | Plan: "Increase agent count only when the next cohort demonstrates a measurable benefit"; brainstorm: "Model per role: Haiku for simple checks… Opus only where judgment matters" |
 
-**Where v2 goes beyond or changes the documents** (to confirm with the owner): autonomous approval and publishing by the council, self-started missions, the Challenger, Pathfinder and Coach roles, the current-best model, the council as a named stage with seats, the synthesiser role, the "cheaper route" search, track-record-based queue priority, and the 16-member demo crew (the plan's pilot is 5–10 contributors).
+**Where v2 goes beyond or changes the documents** (to confirm with the owner): autonomous approval and publishing by the council, the Coach being able to change the approval rule (owner decision, 27 November 2026), self-started missions, the Challenger, Pathfinder and Coach roles, the current-best model, the council as a named stage with seats, the synthesiser role, the "cheaper route" search, track-record-based queue priority, and the 16-member demo crew (the plan's pilot is 5–10 contributors).
 
 ---
 
@@ -772,7 +822,7 @@ So the owner and collaborators can see this is grounded in the planning document
 
 1. All money figures, caps and the bar-to-beat formula are **invented placeholders**.
 2. The demo shows 16 members to make the swarm visible. The plan's pilot is 5–10 contributors with at most 20 jobs at once; the cap is kept as the concurrency limit.
-3. The approval panel size (5), the 4-of-5 rule and the 2-provider minimum are invented placeholders. The self-start budget ($30/day), the 20% different-route share, the challenge triggers (30 days and the others) and the Coach's adoption rule (at least 10% saving) are too. Should the Coach ever be allowed to propose changes to the approval rule itself, or is that fixed for good?
+3. The approval panel size (5), the 4-of-5 rule and the 2-provider minimum are invented placeholders. The self-start budget ($30/day), the 20% different-route share, the challenge triggers (30 days and the others) and the Coach's adoption rule (at least 10% saving) are too. So are the approval-rule floors, the 7-seat rule-change panel, 6 of 7, the 10-mission replay and the 5-mission probation. The owner decided on 27 November 2026 that the Coach may propose approval-rule changes, through the stricter path in 6.5.
 4. **Publishing to outside viewers.** The plan notes that ASIC treats opinions meant to influence financial-product decisions as possible advice, whoever (or whatever) approves them. Removing the person from the loop doesn't change that. The demo is unaffected, but before real outside viewers see autonomous output, the content, audience and jurisdictions still need the review the plan describes.
 5. Should track records ever affect anything beyond queue priority?
 6. How many fresh-data windows does a mission get? Once a window is opened it is "used", per the plan.
@@ -784,4 +834,4 @@ So the owner and collaborators can see this is grounded in the planning document
 
 ## 17. Out of scope
 
-Real authentication, a backend or database, real AI calls, real market data, payments, trading or order placement, and any blockchain, token or wallet. Also out of scope: agents changing their own rules, permissions or budgets, even in the simulation.
+Real authentication, a backend or database, real AI calls, real market data, payments, trading or order placement, and any blockchain, token or wallet. Also out of scope: agents changing their own permissions or budgets, or the fixed rules, even in the simulation. The approval rule changes only through 6.5, and never by the agent that proposed the change.
